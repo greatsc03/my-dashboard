@@ -41,6 +41,35 @@ def _secret(key: str, default: str = "") -> str:
 API_KEY      = _secret("ANTHROPIC_API_KEY")
 SUPABASE_URL = _secret("SUPABASE_URL")
 SUPABASE_KEY = _secret("SUPABASE_KEY")
+APP_PASSWORD = _secret("APP_PASSWORD")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PASSWORD GATE  — APP_PASSWORD 가 설정된 경우에만 활성화
+# ─────────────────────────────────────────────────────────────────────────────
+if APP_PASSWORD:
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.markdown("""
+        <div style="max-width:360px;margin:120px auto;text-align:center">
+          <div style="font-size:48px;margin-bottom:12px">✦</div>
+          <div style="font-size:22px;font-weight:700;color:#1e293b;margin-bottom:6px">나의 대시보드</div>
+          <div style="font-size:13px;color:#64748b;margin-bottom:28px">비밀번호를 입력하세요</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_l, col_c, col_r = st.columns([1, 2, 1])
+        with col_c:
+            pw = st.text_input("", type="password", placeholder="비밀번호",
+                               label_visibility="collapsed")
+            if st.button("입장", use_container_width=True, type="primary"):
+                if pw == APP_PASSWORD:
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("비밀번호가 틀렸습니다.")
+        st.stop()
 
 
 @st.cache_resource
