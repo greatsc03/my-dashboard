@@ -564,9 +564,7 @@ items_html = ""
 for i, q in enumerate(quotes):
     sep = '<hr style="border:none;border-top:1px solid rgba(255,255,255,.18);margin:18px 0">' \
           if i < len(quotes) - 1 else ""
-    author = f'<div class="q-author">— {html_lib.escape(q["author"])}</div>' \
-             if q.get("author") else ""
-    items_html += f'<div class="q-text">{html_lib.escape(q["text"])}</div>{author}{sep}'
+    items_html += f'<div class="q-text">{html_lib.escape(q["text"])}</div>{sep}'
 
 st.markdown(f"""
 <div class="q-card">
