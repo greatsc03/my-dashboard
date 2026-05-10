@@ -429,120 +429,110 @@ else:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SECTION 1 — QUOTE + IMAGE
+# SECTION 1 — QUOTE  (전체 너비)
 # ═════════════════════════════════════════════════════════════════════════════
-col_q, col_img = st.columns([2, 1], gap="medium")
+quotes = quotes_load()
+if not quotes:
+    quotes_add(DEF_QUOTES[0]["text"], DEF_QUOTES[0]["author"])
+    st.rerun()
 
-with col_q:
-    quotes = quotes_load()
-    if not quotes:
-        quotes_add(DEF_QUOTES[0]["text"], DEF_QUOTES[0]["author"])
+st.session_state.quote_idx = min(st.session_state.quote_idx, len(quotes) - 1)
+q = quotes[st.session_state.quote_idx]
+
+st.markdown(f"""
+<div class="q-card">
+  <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.65);
+              text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">
+    💬 오늘의 글귀
+  </div>
+  <div class="q-text">{html_lib.escape(q['text'])}</div>
+  <div class="q-author">{'— ' + html_lib.escape(q['author']) if q.get('author') else ''}</div>
+</div>
+""", unsafe_allow_html=True)
+
+nc1, nc2, nc3 = st.columns([1, 2, 1])
+with nc1:
+    if st.button("◀ 이전", key="q_prev"):
+        st.session_state.quote_idx = (st.session_state.quote_idx - 1) % len(quotes)
+        st.rerun()
+with nc2:
+    st.markdown(
+        f'<p style="text-align:center;color:#64748b;font-size:12px;margin-top:6px">'
+        f'{st.session_state.quote_idx + 1} / {len(quotes)}</p>',
+        unsafe_allow_html=True,
+    )
+with nc3:
+    if st.button("다음 ▶", key="q_next"):
+        st.session_state.quote_idx = (st.session_state.quote_idx + 1) % len(quotes)
         st.rerun()
 
-    st.session_state.quote_idx = min(st.session_state.quote_idx, len(quotes) - 1)
-    q = quotes[st.session_state.quote_idx]
-
-    st.markdown(f"""
-    <div class="q-card">
-      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.65);
-                  text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">
-        💬 오늘의 글귀
-      </div>
-      <div class="q-text">{html_lib.escape(q['text'])}</div>
-      <div class="q-author">{'— ' + html_lib.escape(q['author']) if q.get('author') else ''}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    nc1, nc2, nc3 = st.columns([1, 2, 1])
-    with nc1:
-        if st.button("◀ 이전", key="q_prev"):
-            st.session_state.quote_idx = (st.session_state.quote_idx - 1) % len(quotes)
-            st.rerun()
-    with nc2:
-        st.markdown(
-            f'<p style="text-align:center;color:#64748b;font-size:12px;margin-top:6px">'
-            f'{st.session_state.quote_idx + 1} / {len(quotes)}</p>',
-            unsafe_allow_html=True,
-        )
-    with nc3:
-        if st.button("다음 ▶", key="q_next"):
-            st.session_state.quote_idx = (st.session_state.quote_idx + 1) % len(quotes)
-            st.rerun()
-
-    with st.expander("✏️ 글귀 편집"):
-        for qi in quotes:
-            ec1, ec2, ec3 = st.columns([5, 3, 1])
-            with ec1:
-                st.text_input("", value=qi["text"], key=f"qt_{qi['id']}",
-                              label_visibility="collapsed")
-            with ec2:
-                st.text_input("", value=qi.get("author",""), key=f"qa_{qi['id']}",
-                              placeholder="출처/작가", label_visibility="collapsed")
-            with ec3:
-                if st.button("✕", key=f"qdel_{qi['id']}"):
-                    quotes_delete(qi["id"])
-                    st.rerun()
-
-        if st.button("💾 편집 내용 저장", key="qsave"):
-            for qi in quotes:
-                t = st.session_state.get(f"qt_{qi['id']}", "").strip()
-                a = st.session_state.get(f"qa_{qi['id']}", "").strip()
-                if t:
-                    quotes_update(qi["id"], t, a)
-            st.success("저장되었습니다!")
-            st.rerun()
-
-        st.divider()
-        with st.form("add_quote", clear_on_submit=True):
-            ac1, ac2, ac3 = st.columns([5, 3, 1])
-            with ac1:
-                nqt = st.text_input("", placeholder="새 글귀 내용", label_visibility="collapsed")
-            with ac2:
-                nqa = st.text_input("", placeholder="출처/작가", label_visibility="collapsed")
-            with ac3:
-                if st.form_submit_button("+ 추가") and nqt.strip():
-                    quotes_add(nqt.strip(), nqa.strip())
-                    st.rerun()
-
-with col_img:
-    st.markdown('<div class="sec-lbl">🌠 나의 꿈 갤러리</div>', unsafe_allow_html=True)
-
-    slot = st.session_state.photo_slot
-    img_bytes = image_load(slot)
-
-    if img_bytes:
-        st.image(img_bytes, use_container_width=True)
-    else:
-        st.markdown(f"""
-        <div class="img-ph">
-          <span style="font-size:42px">🌄</span>
-          <span style="font-size:12px">사진 {slot+1}: 클릭하여 업로드</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 슬롯 선택 버튼
-    pc1, pc2, pc3 = st.columns(3)
-    labels = ["① 사진 1", "② 사진 2", "③ 사진 3"]
-    for i, (col, lbl) in enumerate(zip([pc1, pc2, pc3], labels)):
-        with col:
-            style = "primary" if i == slot else "secondary"
-            if st.button(lbl, key=f"ph_slot_{i}", use_container_width=True, type=style):
-                st.session_state.photo_slot = i
+with st.expander("✏️ 글귀 편집"):
+    for qi in quotes:
+        ec1, ec2, ec3 = st.columns([5, 3, 1])
+        with ec1:
+            st.text_input("", value=qi["text"], key=f"qt_{qi['id']}",
+                          label_visibility="collapsed")
+        with ec2:
+            st.text_input("", value=qi.get("author",""), key=f"qa_{qi['id']}",
+                          placeholder="출처/작가", label_visibility="collapsed")
+        with ec3:
+            if st.button("✕", key=f"qdel_{qi['id']}"):
+                quotes_delete(qi["id"])
                 st.rerun()
 
-    # 현재 슬롯 업로드
-    uploaded = st.file_uploader(
-        f"사진 {slot+1} 변경",
-        type=["jpg","jpeg","png","gif","webp"],
-        key=f"img_up_{slot}",
-        label_visibility="collapsed",
-    )
-    if uploaded is not None:
-        ext = uploaded.name.rsplit(".", 1)[-1].lower()
-        if ext not in {"png","jpg","jpeg","gif","webp"}:
-            ext = "png"
-        image_save(uploaded.getvalue(), ext, slot)
+    if st.button("💾 편집 내용 저장", key="qsave"):
+        for qi in quotes:
+            t = st.session_state.get(f"qt_{qi['id']}", "").strip()
+            a = st.session_state.get(f"qa_{qi['id']}", "").strip()
+            if t:
+                quotes_update(qi["id"], t, a)
+        st.success("저장되었습니다!")
         st.rerun()
+
+    st.divider()
+    with st.form("add_quote", clear_on_submit=True):
+        ac1, ac2, ac3 = st.columns([5, 3, 1])
+        with ac1:
+            nqt = st.text_input("", placeholder="새 글귀 내용", label_visibility="collapsed")
+        with ac2:
+            nqa = st.text_input("", placeholder="출처/작가", label_visibility="collapsed")
+        with ac3:
+            if st.form_submit_button("+ 추가") and nqt.strip():
+                quotes_add(nqt.strip(), nqa.strip())
+                st.rerun()
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 1-B — 꿈 갤러리 (사진 3장 나란히)
+# ═════════════════════════════════════════════════════════════════════════════
+st.markdown('<div class="sec-lbl" style="margin-top:18px">🌠 나의 꿈 갤러리</div>',
+            unsafe_allow_html=True)
+
+ph_cols = st.columns(3, gap="medium")
+for slot, ph_col in enumerate(ph_cols):
+    with ph_col:
+        img_bytes = image_load(slot)
+        if img_bytes:
+            st.image(img_bytes, use_container_width=True)
+        else:
+            st.markdown(f"""
+            <div class="img-ph" style="min-height:160px">
+              <span style="font-size:36px">🌄</span>
+              <span style="font-size:11px">사진 {slot+1} 업로드</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        uploaded = st.file_uploader(
+            f"사진 {slot + 1}",
+            type=["jpg","jpeg","png","gif","webp"],
+            key=f"img_up_{slot}",
+            label_visibility="collapsed",
+        )
+        if uploaded is not None:
+            ext = uploaded.name.rsplit(".", 1)[-1].lower()
+            if ext not in {"png","jpg","jpeg","gif","webp"}:
+                ext = "png"
+            image_save(uploaded.getvalue(), ext, slot)
+            st.rerun()
 
 st.divider()
 
