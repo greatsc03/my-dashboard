@@ -468,7 +468,7 @@ st.markdown("""
     font-size:190px; opacity:.07; font-family:Georgia,serif; line-height:1;
     pointer-events:none;
 }
-.q-text   { font-size:18px; font-weight:300; line-height:1.8; font-style:italic; margin-bottom:14px }
+.q-text   { font-size:18px; font-weight:300; line-height:1.8; font-style:italic; margin-bottom:14px; white-space:pre-wrap }
 .q-author { font-size:13px; opacity:.73; text-align:right }
 .img-ph {
     background:linear-gradient(135deg,#f0f4ff,#e8f4f8); border-radius:12px;
@@ -566,7 +566,7 @@ st.markdown(f"""
 <div class="q-card">
   <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.65);
               text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">
-    💬 오늘의 글귀
+    🌿 인생의 지혜
   </div>
   <div class="q-text">{html_lib.escape(q['text'])}</div>
   <div class="q-author">{'— ' + html_lib.escape(q['author']) if q.get('author') else ''}</div>
@@ -589,16 +589,17 @@ with nc3:
         st.session_state.quote_idx = (st.session_state.quote_idx + 1) % len(quotes)
         st.rerun()
 
-with st.expander("✏️ 글귀 편집"):
+with st.expander("📚 지혜 창고"):
     for qi in quotes:
         ec1, ec2, ec3 = st.columns([5, 3, 1])
         with ec1:
-            st.text_input("", value=qi["text"], key=f"qt_{qi['id']}",
-                          label_visibility="collapsed")
+            st.text_area("", value=qi["text"], key=f"qt_{qi['id']}",
+                         label_visibility="collapsed", height=90)
         with ec2:
             st.text_input("", value=qi.get("author",""), key=f"qa_{qi['id']}",
                           placeholder="출처/작가", label_visibility="collapsed")
         with ec3:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
             if st.button("✕", key=f"qdel_{qi['id']}"):
                 quotes_delete(qi["id"])
                 st.rerun()
