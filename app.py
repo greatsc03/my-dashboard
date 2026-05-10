@@ -303,11 +303,59 @@ def image_save(img_bytes: bytes, ext: str = "png", slot: int = 0):
                 old.unlink()
         (DATA_DIR / f"dashboard_img_{slot}.{ext}").write_bytes(img_bytes)
 
+def image_clear(slot: int):
+    """슬롯의 사진을 삭제."""
+    key = f"image_b64_{slot}"
+    db = _db()
+    if db:
+        db.table("settings").delete().eq("key", key).execute()
+    else:
+        for e in ["png", "jpg", "jpeg", "gif", "webp"]:
+            p = DATA_DIR / f"dashboard_img_{slot}.{e}"
+            if p.exists():
+                p.unlink()
+
+# ── PHOTO COUNT ───────────────────────────────────────────────────────────────
+def get_photo_count() -> int:
+    if "photo_count" not in st.session_state:
+        db = _db()
+        if db:
+            rows = db.table("settings").select("value").eq("key","photo_count").execute().data
+            st.session_state.photo_count = int(rows[0]["value"]) if rows else 3
+        else:
+            p = DATA_DIR / "photo_count.txt"
+            st.session_state.photo_count = int(p.read_text().strip()) if p.exists() else 3
+    return st.session_state.photo_count
+
+def set_photo_count(n: int):
+    n = max(1, n)
+    db = _db()
+    if db:
+        rows = db.table("settings").select("key").eq("key","photo_count").execute().data
+        if rows:
+            db.table("settings").update({"value": str(n)}).eq("key","photo_count").execute()
+        else:
+            db.table("settings").insert({"key":"photo_count","value":str(n)}).execute()
+    else:
+        (DATA_DIR / "photo_count.txt").write_text(str(n))
+    st.session_state.photo_count = n
+
+def remove_photo_slot(slot: int, count: int):
+    """해당 슬롯을 제거하고 이후 사진을 앞으로 당김."""
+    for i in range(slot, count - 1):
+        img = image_load(i + 1)
+        if img:
+            image_save(img, "png", i)
+        else:
+            image_clear(i)
+    image_clear(count - 1)
+    set_photo_count(count - 1)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
-for k, v in [("quote_idx", 0), ("wk_off", 0), ("tr_result", ""), ("photo_slot", 0)]:
+for k, v in [("quote_idx", 0), ("wk_off", 0), ("tr_result", "")]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -502,37 +550,67 @@ with st.expander("✏️ 글귀 편집"):
                 st.rerun()
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SECTION 1-B — 꿈 갤러리 (사진 3장 나란히)
+# SECTION 1-B — 꿈 갤러리 (동적 사진 개수)
 # ═════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="sec-lbl" style="margin-top:18px">🌠 나의 꿈 갤러리</div>',
-            unsafe_allow_html=True)
+photo_count = get_photo_count()
 
-ph_cols = st.columns(3, gap="medium")
-for slot, ph_col in enumerate(ph_cols):
-    with ph_col:
-        img_bytes = image_load(slot)
-        if img_bytes:
-            st.image(img_bytes, use_container_width=True)
-        else:
-            st.markdown(f"""
-            <div class="img-ph" style="min-height:160px">
-              <span style="font-size:36px">🌄</span>
-              <span style="font-size:11px">사진 {slot+1} 업로드</span>
-            </div>
-            """, unsafe_allow_html=True)
+lbl_c, add_c = st.columns([6, 1])
+with lbl_c:
+    st.markdown('<div class="sec-lbl" style="margin-top:18px">🌠 나의 꿈 갤러리</div>',
+                unsafe_allow_html=True)
+with add_c:
+    if st.button("＋ 추가", key="ph_add", use_container_width=True):
+        set_photo_count(photo_count + 1)
+        st.rerun()
 
-        uploaded = st.file_uploader(
-            f"사진 {slot + 1}",
-            type=["jpg","jpeg","png","gif","webp"],
-            key=f"img_up_{slot}",
-            label_visibility="collapsed",
-        )
-        if uploaded is not None:
-            ext = uploaded.name.rsplit(".", 1)[-1].lower()
-            if ext not in {"png","jpg","jpeg","gif","webp"}:
-                ext = "png"
-            image_save(uploaded.getvalue(), ext, slot)
-            st.rerun()
+PER_ROW = 3
+for row_start in range(0, photo_count, PER_ROW):
+    row_slots = list(range(row_start, min(row_start + PER_ROW, photo_count)))
+    cols = st.columns(len(row_slots), gap="medium")
+
+    for slot, col in zip(row_slots, cols):
+        with col:
+            img_bytes = image_load(slot)
+            if img_bytes:
+                st.image(img_bytes, use_container_width=True)
+            else:
+                st.markdown(f"""
+                <div class="img-ph" style="min-height:150px;cursor:pointer">
+                  <span style="font-size:34px">🌄</span>
+                  <span style="font-size:11px">사진 {slot+1}</span>
+                </div>""", unsafe_allow_html=True)
+
+            # 버튼: 평소엔 작게, 클릭 시 업로더 토글
+            b1, b2 = st.columns([1, 1])
+            with b1:
+                lbl = "📷 닫기" if st.session_state.get(f"show_up_{slot}") else "📷 변경"
+                if st.button(lbl, key=f"ph_toggle_{slot}", use_container_width=True):
+                    st.session_state[f"show_up_{slot}"] = not st.session_state.get(f"show_up_{slot}", False)
+                    st.rerun()
+            with b2:
+                if photo_count > 1:
+                    if st.button("✕ 삭제", key=f"ph_del_{slot}", use_container_width=True):
+                        remove_photo_slot(slot, photo_count)
+                        # 관련 토글 상태 정리
+                        for k in list(st.session_state.keys()):
+                            if k.startswith("show_up_") or k.startswith("ph_toggle_"):
+                                del st.session_state[k]
+                        st.rerun()
+
+            if st.session_state.get(f"show_up_{slot}", False):
+                uploaded = st.file_uploader(
+                    f"사진 {slot+1} 선택",
+                    type=["jpg","jpeg","png","gif","webp"],
+                    key=f"img_up_{slot}",
+                    label_visibility="collapsed",
+                )
+                if uploaded is not None:
+                    ext = uploaded.name.rsplit(".", 1)[-1].lower()
+                    if ext not in {"png","jpg","jpeg","gif","webp"}:
+                        ext = "png"
+                    image_save(uploaded.getvalue(), ext, slot)
+                    st.session_state[f"show_up_{slot}"] = False
+                    st.rerun()
 
 st.divider()
 
