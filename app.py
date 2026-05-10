@@ -415,6 +415,24 @@ def set_photo_count(n: int):
         (DATA_DIR / "photo_count.txt").write_text(str(n))
     st.session_state.photo_count = n
 
+def _img_html(img_bytes: bytes, height: int = 220) -> str:
+    """이미지를 base64 HTML로 변환. 높이 고정, 원본 비율 유지."""
+    import base64 as _b64
+    hdr = img_bytes[:4]
+    if hdr == b'\x89PNG':          mime = 'image/png'
+    elif img_bytes[:3] == b'\xff\xd8\xff': mime = 'image/jpeg'
+    elif hdr[:6] in (b'GIF87a', b'GIF89a'): mime = 'image/gif'
+    elif hdr == b'RIFF':           mime = 'image/webp'
+    else:                          mime = 'image/jpeg'
+    b64 = _b64.b64encode(img_bytes).decode()
+    return (
+        f'<div style="height:{height}px;background:#f0ebfc;border-radius:10px;'
+        f'overflow:hidden;display:flex;align-items:center;justify-content:center">'
+        f'<img src="data:{mime};base64,{b64}" '
+        f'style="height:{height}px;width:auto;max-width:100%;'
+        f'object-fit:contain;display:block;border-radius:8px"></div>'
+    )
+
 def remove_photo_slot(slot: int, count: int):
     """해당 슬롯을 제거하고 이후 사진을 앞으로 당김."""
     for i in range(slot, count - 1):
@@ -635,11 +653,14 @@ for row_start in range(0, photo_count, PER_ROW):
         with col:
             img_bytes = image_load(slot)
             if img_bytes:
-                st.image(img_bytes, use_container_width=True)
+                # 높이 고정(220px), 원본 비율 유지
+                st.markdown(_img_html(img_bytes, height=220), unsafe_allow_html=True)
             else:
                 st.markdown(f"""
-                <div class="img-ph" style="min-height:150px;cursor:pointer">
-                  <span style="font-size:34px">🌄</span>
+                <div style="height:220px;background:#f0ebfc;border-radius:10px;
+                            display:flex;flex-direction:column;align-items:center;
+                            justify-content:center;gap:6px;color:#625A73">
+                  <span style="font-size:34px;opacity:.4">🌄</span>
                   <span style="font-size:11px">사진 {slot+1}</span>
                 </div>""", unsafe_allow_html=True)
 
