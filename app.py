@@ -430,7 +430,7 @@ def remove_photo_slot(slot: int, count: int):
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
-for k, v in [("quote_idx", 0), ("wk_off", 0), ("tr_result", "")]:
+for k, v in [("wk_off", 0), ("tr_result", "")]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -559,35 +559,24 @@ if not quotes:
     quotes_add(DEF_QUOTES[0]["text"], DEF_QUOTES[0]["author"])
     st.rerun()
 
-st.session_state.quote_idx = min(st.session_state.quote_idx, len(quotes) - 1)
-q = quotes[st.session_state.quote_idx]
+# 모든 글귀를 구분선과 함께 하나의 카드에 표시
+items_html = ""
+for i, q in enumerate(quotes):
+    sep = '<hr style="border:none;border-top:1px solid rgba(255,255,255,.18);margin:18px 0">' \
+          if i < len(quotes) - 1 else ""
+    author = f'<div class="q-author">— {html_lib.escape(q["author"])}</div>' \
+             if q.get("author") else ""
+    items_html += f'<div class="q-text">{html_lib.escape(q["text"])}</div>{author}{sep}'
 
 st.markdown(f"""
 <div class="q-card">
   <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.65);
-              text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">
+              text-transform:uppercase;letter-spacing:1px;margin-bottom:20px">
     🌿 인생의 지혜
   </div>
-  <div class="q-text">{html_lib.escape(q['text'])}</div>
-  <div class="q-author">{'— ' + html_lib.escape(q['author']) if q.get('author') else ''}</div>
+  {items_html}
 </div>
 """, unsafe_allow_html=True)
-
-nc1, nc2, nc3 = st.columns([1, 2, 1])
-with nc1:
-    if st.button("◀ 이전", key="q_prev"):
-        st.session_state.quote_idx = (st.session_state.quote_idx - 1) % len(quotes)
-        st.rerun()
-with nc2:
-    st.markdown(
-        f'<p style="text-align:center;color:#64748b;font-size:12px;margin-top:6px">'
-        f'{st.session_state.quote_idx + 1} / {len(quotes)}</p>',
-        unsafe_allow_html=True,
-    )
-with nc3:
-    if st.button("다음 ▶", key="q_next"):
-        st.session_state.quote_idx = (st.session_state.quote_idx + 1) % len(quotes)
-        st.rerun()
 
 with st.expander("📚 지혜 창고"):
     for qi in quotes:
