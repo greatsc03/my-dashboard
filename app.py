@@ -1057,3 +1057,92 @@ st.markdown(
     f'<span class="sum-badge">{done_t}/{total_t}</span>업무 완료</div>',
     unsafe_allow_html=True,
 )
+
+st.divider()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 5 — 🤖 AI 채팅
+# ═════════════════════════════════════════════════════════════════════════════
+st.markdown('<div class="sec-lbl">🤖 AI 채팅</div>', unsafe_allow_html=True)
+
+if not API_KEY:
+    st.warning("⚠️ ANTHROPIC_API_KEY가 없습니다. Streamlit Cloud Secrets를 확인해주세요.")
+else:
+    # ── 세션 초기화 ──────────────────────────────────────────────────────────
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+
+    ROLES = {
+        "🤝 일반 어시스턴트":  "당신은 친절하고 유능한 AI 어시스턴트입니다. 한국어로 대화하세요.",
+        "💼 비즈니스 코치":    "당신은 경험 많은 비즈니스 코치입니다. 실용적이고 구체적인 조언을 한국어로 제공하세요.",
+        "📚 학습 도우미":      "당신은 친절한 학습 도우미입니다. 개념을 쉽고 명확하게 설명하며 한국어로 대화하세요.",
+        "✍️ 글쓰기 도우미":   "당신은 전문 작가이자 편집자입니다. 글쓰기와 표현에 대해 구체적으로 도움을 주세요. 한국어로 대화하세요.",
+        "💡 아이디어 파트너":  "당신은 창의적인 브레인스토밍 파트너입니다. 다양한 관점에서 아이디어를 발전시켜 주세요. 한국어로 대화하세요.",
+    }
+
+    # ── 상단 컨트롤 ──────────────────────────────────────────────────────────
+    ctrl1, ctrl2, ctrl3 = st.columns([4, 1, 1])
+    with ctrl1:
+        role_key = st.selectbox(
+            "AI 역할", list(ROLES.keys()),
+            label_visibility="collapsed", key="chat_role",
+        )
+        system_prompt = ROLES[role_key]
+    with ctrl2:
+        # 대화 다운로드
+        if st.session_state.chat_messages:
+            lines = []
+            for m in st.session_state.chat_messages:
+                who = "나" if m["role"] == "user" else "AI"
+                lines.append(f"[{who}]\n{m['content']}")
+            dl_txt = "\n\n".join(lines)
+            st.download_button(
+                "⬇️ 저장", dl_txt.encode("utf-8"),
+                f"chat_{date.today()}.txt", "text/plain;charset=utf-8",
+                use_container_width=True, key="dl_chat",
+            )
+    with ctrl3:
+        if st.button("🗑️ 초기화", use_container_width=True, key="chat_clear"):
+            st.session_state.chat_messages = []
+            st.rerun()
+
+    # ── 대화 내역 표시 ────────────────────────────────────────────────────────
+    chat_box = st.container()
+    with chat_box:
+        for msg in st.session_state.chat_messages:
+            with st.chat_message(msg["role"],
+                                 avatar="🧑" if msg["role"] == "user" else "🤖"):
+                st.markdown(msg["content"])
+
+    # ── 메시지 입력 (항상 화면 하단 고정) ────────────────────────────────────
+    if prompt := st.chat_input("무엇이든 물어보세요..."):
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+
+        with chat_box:
+            with st.chat_message("user", avatar="🧑"):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant", avatar="🤖"):
+                try:
+                    client = anthropic.Anthropic(api_key=API_KEY)
+                    api_msgs = [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.chat_messages
+                    ]
+
+                    def _stream():
+                        with client.messages.stream(
+                            model="claude-sonnet-4-6",
+                            max_tokens=4096,
+                            system=system_prompt,
+                            messages=api_msgs,
+                        ) as s:
+                            yield from s.text_stream
+
+                    response = st.write_stream(_stream())
+                    st.session_state.chat_messages.append(
+                        {"role": "assistant", "content": response}
+                    )
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {e}")
