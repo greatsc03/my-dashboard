@@ -6,7 +6,7 @@ import csv
 import io
 import html as html_lib
 import base64
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -45,6 +45,8 @@ API_KEY      = _secret("ANTHROPIC_API_KEY")
 SUPABASE_URL = _secret("SUPABASE_URL")
 SUPABASE_KEY = _secret("SUPABASE_KEY")
 APP_PASSWORD = _secret("APP_PASSWORD")
+
+KST = timezone(timedelta(hours=9))   # 한국 표준시 (UTC+9)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PASSWORD GATE  — APP_PASSWORD 가 설정된 경우에만 활성화
@@ -263,7 +265,7 @@ def ideas_load():
     return _jload(IDEAS_F, [])
 
 def ideas_add(text: str):
-    now_str = datetime.now().isoformat()
+    now_str = datetime.now(KST).strftime("%Y-%m-%dT%H:%M:%S")
     try:
         db = _db()
         if db:
@@ -742,41 +744,30 @@ with idea_col:
         )
 
     # 최근 5개만 표시
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    for item in ideas[:5]:
+    def _idea_card(item, key_suffix=""):
         c1, c2 = st.columns([11, 1])
         with c1:
             dt = item.get("created_at", "")[:16].replace("T", " ")
             st.markdown(f"""
-            <div style="padding:10px 14px;background:#f8fafc;border-radius:10px;
-                        margin-bottom:7px;border-left:3px solid #4361ee">
-              <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">{dt}</div>
-              <div style="font-size:13px;line-height:1.65;white-space:pre-wrap">
+            <div style="padding:5px 10px 6px;background:#f8fafc;border-radius:8px;
+                        margin-bottom:4px;border-left:3px solid #4361ee">
+              <div style="font-size:10px;color:#b0bbd4;margin-bottom:1px">{dt}</div>
+              <div style="font-size:13px;line-height:1.45;white-space:pre-wrap">
                 {html_lib.escape(item['text'])}</div>
             </div>""", unsafe_allow_html=True)
         with c2:
-            if st.button("✕", key=f"del_idea_{item['id']}", help="삭제"):
+            if st.button("✕", key=f"del_idea{key_suffix}_{item['id']}", help="삭제"):
                 ideas_delete(item["id"])
                 st.rerun()
+
+    for item in ideas[:5]:
+        _idea_card(item)
 
     # 6번째 이후는 접기
     if len(ideas) > 5:
         with st.expander(f"더보기 ({len(ideas) - 5}개)"):
             for item in ideas[5:]:
-                c1, c2 = st.columns([11, 1])
-                with c1:
-                    dt = item.get("created_at", "")[:16].replace("T", " ")
-                    st.markdown(f"""
-                    <div style="padding:9px 12px;background:#f8fafc;border-radius:9px;
-                                margin-bottom:6px;border-left:3px solid #c7d7fd">
-                      <div style="font-size:11px;color:#94a3b8;margin-bottom:3px">{dt}</div>
-                      <div style="font-size:12px;line-height:1.6;white-space:pre-wrap">
-                        {html_lib.escape(item['text'])}</div>
-                    </div>""", unsafe_allow_html=True)
-                with c2:
-                    if st.button("✕", key=f"del_idea_ex_{item['id']}", help="삭제"):
-                        ideas_delete(item["id"])
-                        st.rerun()
+                _idea_card(item, key_suffix="_ex")
 
 # ── 다이어리 ──────────────────────────────────────────────────────────────────
 with diary_col:
