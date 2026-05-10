@@ -92,6 +92,8 @@ QUOTES_F = DATA_DIR / "quotes.json"
 GOALS_F  = DATA_DIR / "goals.json"
 TASKS_F  = DATA_DIR / "tasks.json"
 SAVED_F  = DATA_DIR / "translations.json"
+IDEAS_F  = DATA_DIR / "ideas.json"
+DIARY_F  = DATA_DIR / "diary.json"
 
 def _jload(path: Path, default):
     try:
@@ -247,6 +249,79 @@ def tasks_update(item_id, day_key, text):
         if 0 <= item_id < len(lst):
             lst[item_id]["text"] = text
         _jsave(TASKS_F, all_t)
+
+# ── IDEAS ─────────────────────────────────────────────────────────────────────
+def ideas_load():
+    try:
+        db = _db()
+        if db:
+            return db.table("ideas").select("*").order("created_at", desc=True).limit(200).execute().data
+    except Exception:
+        pass
+    return _jload(IDEAS_F, [])
+
+def ideas_add(text: str):
+    now_str = datetime.now().isoformat()
+    try:
+        db = _db()
+        if db:
+            db.table("ideas").insert({"text": text, "created_at": now_str}).execute()
+            return
+    except Exception:
+        pass
+    items = _jload(IDEAS_F, [])
+    items.insert(0, {"id": len(items), "text": text, "created_at": now_str})
+    _jsave(IDEAS_F, items)
+
+def ideas_delete(item_id):
+    try:
+        db = _db()
+        if db:
+            db.table("ideas").delete().eq("id", item_id).execute()
+            return
+    except Exception:
+        pass
+    items = _jload(IDEAS_F, [])
+    items = [i for i in items if str(i.get("id")) != str(item_id)]
+    _jsave(IDEAS_F, items)
+
+# ── DIARY ─────────────────────────────────────────────────────────────────────
+def diary_load(date_str: str) -> str:
+    try:
+        db = _db()
+        if db:
+            rows = db.table("diary").select("content").eq("date", date_str).execute().data
+            return rows[0]["content"] if rows else ""
+    except Exception:
+        pass
+    return _jload(DIARY_F, {}).get(date_str, "")
+
+def diary_save(date_str: str, content: str):
+    now_str = datetime.now().isoformat()
+    try:
+        db = _db()
+        if db:
+            rows = db.table("diary").select("id").eq("date", date_str).execute().data
+            if rows:
+                db.table("diary").update({"content": content, "updated_at": now_str}).eq("date", date_str).execute()
+            else:
+                db.table("diary").insert({"date": date_str, "content": content, "updated_at": now_str}).execute()
+            return
+    except Exception:
+        pass
+    all_d = _jload(DIARY_F, {})
+    all_d[date_str] = content
+    _jsave(DIARY_F, all_d)
+
+def diary_all() -> list:
+    try:
+        db = _db()
+        if db:
+            return db.table("diary").select("date,content").order("date", desc=True).execute().data
+    except Exception:
+        pass
+    all_d = _jload(DIARY_F, {})
+    return [{"date": k, "content": v} for k, v in sorted(all_d.items(), reverse=True)]
 
 # ── TRANSLATIONS ──────────────────────────────────────────────────────────────
 def tr_load():
@@ -611,6 +686,124 @@ for row_start in range(0, photo_count, PER_ROW):
                     image_save(uploaded.getvalue(), ext, slot)
                     st.session_state[f"show_up_{slot}"] = False
                     st.rerun()
+
+st.divider()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SECTION 1-C — 💡 아이디어 노트  +  📔 다이어리
+# ═════════════════════════════════════════════════════════════════════════════
+DAYS_KR = ["월","화","수","목","금","토","일"]
+
+idea_col, diary_col = st.columns([1, 1], gap="large")
+
+# ── 아이디어 노트 ──────────────────────────────────────────────────────────────
+with idea_col:
+    st.markdown('<div class="sec-lbl">💡 아이디어 노트</div>', unsafe_allow_html=True)
+
+    with st.form("add_idea", clear_on_submit=True):
+        idea_txt = st.text_area(
+            "", placeholder="번뜩이는 아이디어를 바로 적어두세요...",
+            height=95, label_visibility="collapsed", key="idea_inp",
+        )
+        if st.form_submit_button("💾 저장", use_container_width=True) and idea_txt.strip():
+            ideas_add(idea_txt.strip())
+            st.rerun()
+
+    ideas = ideas_load()
+
+    if ideas:
+        idea_lines = []
+        for item in ideas:
+            dt = item.get("created_at", "")[:16].replace("T", " ")
+            idea_lines.append(f"[{dt}]\n{item['text']}")
+        dl_idea = "\n\n".join(idea_lines)
+        st.download_button(
+            "⬇️ 전체 다운로드 (.txt)", dl_idea.encode("utf-8"),
+            f"ideas_{date.today()}.txt", "text/plain;charset=utf-8",
+            use_container_width=True, key="dl_ideas",
+        )
+
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+    for item in ideas[:50]:
+        c1, c2 = st.columns([11, 1])
+        with c1:
+            dt = item.get("created_at", "")[:16].replace("T", " ")
+            st.markdown(f"""
+            <div style="padding:10px 14px;background:#f8fafc;border-radius:10px;
+                        margin-bottom:7px;border-left:3px solid #4361ee">
+              <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">{dt}</div>
+              <div style="font-size:13px;line-height:1.65;white-space:pre-wrap">
+                {html_lib.escape(item['text'])}</div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            if st.button("✕", key=f"del_idea_{item['id']}", help="삭제"):
+                ideas_delete(item["id"])
+                st.rerun()
+
+# ── 다이어리 ──────────────────────────────────────────────────────────────────
+with diary_col:
+    st.markdown('<div class="sec-lbl">📔 다이어리</div>', unsafe_allow_html=True)
+
+    diary_date = st.date_input(
+        "", value=date.today(),
+        label_visibility="collapsed", key="diary_date_sel",
+    )
+    date_str = diary_date.strftime("%Y-%m-%d")
+    dn = DAYS_KR[diary_date.weekday()]
+    st.caption(f"📅 {diary_date.strftime('%Y년 %m월 %d일')} ({dn})")
+
+    existing = diary_load(date_str)
+    content = st.text_area(
+        "", value=existing, height=230,
+        placeholder="오늘의 생각, 느낌, 배운 것들을 자유롭게 기록해보세요...",
+        label_visibility="collapsed",
+        key=f"diary_{date_str}",
+    )
+
+    sv1, sv2 = st.columns(2)
+    with sv1:
+        if st.button("💾 저장", key="diary_save_btn",
+                     use_container_width=True, type="primary"):
+            diary_save(date_str, content)
+            st.success("저장되었습니다!")
+
+    all_diary = diary_all()
+    if all_diary:
+        diary_lines = []
+        for entry in all_diary:
+            try:
+                d = datetime.strptime(entry["date"], "%Y-%m-%d")
+                header = f"{'='*32}\n{d.strftime('%Y년 %m월 %d일')} ({DAYS_KR[d.weekday()]})\n{'='*32}"
+            except Exception:
+                header = f"{'='*32}\n{entry['date']}\n{'='*32}"
+            diary_lines.append(f"{header}\n{entry.get('content','')}")
+        dl_diary = "\n\n".join(diary_lines)
+        with sv2:
+            st.download_button(
+                "⬇️ 전체 다운로드", dl_diary.encode("utf-8"),
+                f"diary_{date.today()}.txt", "text/plain;charset=utf-8",
+                use_container_width=True, key="dl_diary",
+            )
+
+    # 이전 기록 미리보기
+    prev = [e for e in all_diary if e["date"] != date_str]
+    if prev:
+        with st.expander(f"📚 이전 기록 ({len(prev)}건)"):
+            for entry in prev[:8]:
+                try:
+                    d = datetime.strptime(entry["date"], "%Y-%m-%d")
+                    lbl = f"{d.strftime('%Y.%m.%d')} ({DAYS_KR[d.weekday()]})"
+                except Exception:
+                    lbl = entry["date"]
+                preview = (entry.get("content") or "")[:80]
+                if len(entry.get("content","")) > 80:
+                    preview += "..."
+                st.markdown(f"""
+                <div style="padding:9px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px">
+                  <div style="font-size:11px;font-weight:700;color:#4361ee;margin-bottom:3px">{lbl}</div>
+                  <div style="font-size:12px;color:#475569;white-space:pre-wrap">{html_lib.escape(preview)}</div>
+                </div>""", unsafe_allow_html=True)
 
 st.divider()
 
