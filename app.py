@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import json
 import os
 import html as html_lib
@@ -21,7 +22,7 @@ import anthropic
 # PAGE CONFIG  (must be first Streamlit call)
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="나의 대시보드", page_icon="✦",
+    page_title="Sangchan's Board", page_icon="✦",
     layout="wide", initial_sidebar_state="collapsed",
 )
 
@@ -236,6 +237,17 @@ def tasks_delete(item_id, day_key):
             lst.pop(item_id)
         _jsave(TASKS_F, all_t)
 
+def tasks_update(item_id, day_key, text):
+    db = _db()
+    if db:
+        db.table("tasks").update({"text": text}).eq("id", item_id).execute()
+    else:
+        all_t = _jload(TASKS_F, {})
+        lst = all_t.get(day_key, [])
+        if 0 <= item_id < len(lst):
+            lst[item_id]["text"] = text
+        _jsave(TASKS_F, all_t)
+
 # ── TRANSLATIONS ──────────────────────────────────────────────────────────────
 def tr_load():
     db = _db()
@@ -256,44 +268,46 @@ def tr_add(src, result, mode, date_str):
             saved.pop()
         _jsave(SAVED_F, saved)
 
-# ── IMAGE ─────────────────────────────────────────────────────────────────────
-def image_load():
-    """Returns image bytes or None."""
+# ── IMAGE (3장 슬롯 지원) ──────────────────────────────────────────────────────
+def image_load(slot: int = 0):
+    """Returns image bytes or None for the given slot (0-2)."""
+    key = f"image_b64_{slot}"
     db = _db()
     if db:
-        rows = db.table("settings").select("value").eq("key", "image_b64").execute().data
+        rows = db.table("settings").select("value").eq("key", key).execute().data
         if rows:
             val = rows[0]["value"]
             _, b64 = (val.split(":", 1) if ":" in val else ("png", val))
             return base64.b64decode(b64)
         return None
     for ext in ["png", "jpg", "jpeg", "gif", "webp"]:
-        p = DATA_DIR / f"dashboard_img.{ext}"
+        p = DATA_DIR / f"dashboard_img_{slot}.{ext}"
         if p.exists():
             return p.read_bytes()
     return None
 
-def image_save(img_bytes: bytes, ext: str = "png"):
+def image_save(img_bytes: bytes, ext: str = "png", slot: int = 0):
+    key = f"image_b64_{slot}"
     db = _db()
     if db:
         val = f"{ext}:{base64.b64encode(img_bytes).decode()}"
-        rows = db.table("settings").select("key").eq("key", "image_b64").execute().data
+        rows = db.table("settings").select("key").eq("key", key).execute().data
         if rows:
-            db.table("settings").update({"value": val}).eq("key", "image_b64").execute()
+            db.table("settings").update({"value": val}).eq("key", key).execute()
         else:
-            db.table("settings").insert({"key": "image_b64", "value": val}).execute()
+            db.table("settings").insert({"key": key, "value": val}).execute()
     else:
         for e in ["png", "jpg", "jpeg", "gif", "webp"]:
-            old = DATA_DIR / f"dashboard_img.{e}"
+            old = DATA_DIR / f"dashboard_img_{slot}.{e}"
             if old.exists():
                 old.unlink()
-        (DATA_DIR / f"dashboard_img.{ext}").write_bytes(img_bytes)
+        (DATA_DIR / f"dashboard_img_{slot}.{ext}").write_bytes(img_bytes)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
-for k, v in [("quote_idx", 0), ("wk_off", 0), ("tr_result", "")]:
+for k, v in [("quote_idx", 0), ("wk_off", 0), ("tr_result", ""), ("photo_slot", 0)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -365,25 +379,47 @@ div[data-testid="column"] { padding-left:4px !important; padding-right:4px !impo
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HEADER
+# HEADER  — components.html 로 실시간 JS 시계 구현
 # ─────────────────────────────────────────────────────────────────────────────
-now  = datetime.now()
-DAYS = ["월","화","수","목","금","토","일"]
-h    = now.hour
-greet = "좋은 아침이에요 ☀️" if h < 12 else ("좋은 오후에요 🌤️" if h < 18 else "좋은 저녁이에요 🌙")
-
-st.markdown(f"""
-<div class="dash-hdr">
+components.html("""
+<style>
+*{margin:0;padding:0;box-sizing:border-box;
+  font-family:'Malgun Gothic','Noto Sans KR','Segoe UI',sans-serif}
+.hdr{
+  background:linear-gradient(120deg,#4361ee 0%,#7c3aed 55%,#a855f7 100%);
+  padding:14px 28px;border-radius:0 0 18px 18px;color:#fff;
+  display:flex;justify-content:space-between;align-items:center;
+  box-shadow:0 4px 24px rgba(67,97,238,.28);
+}
+.logo{font-size:20px;font-weight:700;letter-spacing:-.5px}
+.sub {font-size:12px;opacity:.75;margin-top:3px}
+.clk{font-size:26px;font-weight:700;text-align:right;
+     font-feature-settings:'tnum';letter-spacing:.5px}
+.dt {font-size:12px;opacity:.82;text-align:right;margin-top:2px}
+</style>
+<div class="hdr">
   <div>
-    <div class="dash-logo">✦ 나의 대시보드</div>
-    <div class="dash-sub">{greet}</div>
+    <div class="logo">✦ Sangchan's Board</div>
+    <div class="sub">Dream it. Plan it. Do it. 🚀</div>
   </div>
   <div>
-    <div class="dash-time">{now.strftime('%H:%M')}</div>
-    <div class="dash-date">{now.strftime('%Y.%m.%d')} ({DAYS[now.weekday()]})</div>
+    <div class="clk" id="clk">--:--:--</div>
+    <div class="dt"  id="dt"></div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+<script>
+function tick(){
+  var n=new Date(), p=function(x){return String(x).padStart(2,'0')};
+  document.getElementById('clk').textContent=p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
+  var D=['일','월','화','수','목','금','토'];
+  document.getElementById('dt').textContent=n.getFullYear()+'.'+p(n.getMonth()+1)+'.'+p(n.getDate())+' ('+D[n.getDay()]+')';
+}
+tick(); setInterval(tick,500);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()});
+</script>
+""", height=88)
+
+now = datetime.now()   # 번역 날짜 등 하단 섹션에서 사용
 
 # Mode indicator
 if _db():
@@ -469,25 +505,43 @@ with col_q:
                     st.rerun()
 
 with col_img:
-    st.markdown('<div class="sec-lbl">🖼️ 나의 그림</div>', unsafe_allow_html=True)
-    img_bytes = image_load()
+    st.markdown('<div class="sec-lbl">🌠 나의 꿈 갤러리</div>', unsafe_allow_html=True)
+
+    slot = st.session_state.photo_slot
+    img_bytes = image_load(slot)
+
     if img_bytes:
         st.image(img_bytes, use_container_width=True)
     else:
-        st.markdown("""
+        st.markdown(f"""
         <div class="img-ph">
           <span style="font-size:42px">🌄</span>
-          <span style="font-size:12px">아래에서 이미지를 업로드해주세요</span>
+          <span style="font-size:12px">사진 {slot+1}: 클릭하여 업로드</span>
         </div>
         """, unsafe_allow_html=True)
 
-    uploaded = st.file_uploader("이미지 업로드", type=["jpg","jpeg","png","gif","webp"],
-                                 label_visibility="collapsed", key="img_up")
+    # 슬롯 선택 버튼
+    pc1, pc2, pc3 = st.columns(3)
+    labels = ["① 사진 1", "② 사진 2", "③ 사진 3"]
+    for i, (col, lbl) in enumerate(zip([pc1, pc2, pc3], labels)):
+        with col:
+            style = "primary" if i == slot else "secondary"
+            if st.button(lbl, key=f"ph_slot_{i}", use_container_width=True, type=style):
+                st.session_state.photo_slot = i
+                st.rerun()
+
+    # 현재 슬롯 업로드
+    uploaded = st.file_uploader(
+        f"사진 {slot+1} 변경",
+        type=["jpg","jpeg","png","gif","webp"],
+        key=f"img_up_{slot}",
+        label_visibility="collapsed",
+    )
     if uploaded is not None:
         ext = uploaded.name.rsplit(".", 1)[-1].lower()
         if ext not in {"png","jpg","jpeg","gif","webp"}:
             ext = "png"
-        image_save(uploaded.getvalue(), ext)
+        image_save(uploaded.getvalue(), ext, slot)
         st.rerun()
 
 st.divider()
@@ -640,7 +694,7 @@ st.markdown('<div class="sec-lbl">📅 주간 계획</div>', unsafe_allow_html=T
 
 today_d    = date.today()
 week_start = today_d - timedelta(days=today_d.weekday()) + timedelta(weeks=st.session_state.wk_off)
-week_end   = week_start + timedelta(days=6)
+week_end   = week_start + timedelta(days=4)   # 금요일까지 (5일)
 
 wc1, wc2, wc3, wc4, wc5 = st.columns([1, 1, 4, 1, 1])
 with wc1:
@@ -649,7 +703,7 @@ with wc3:
     st.markdown(
         f'<div style="text-align:center;font-weight:700;font-size:14px;padding:7px 0">'
         f'{week_start.year}년 {week_start.month}/{week_start.day}'
-        f' ~ {week_end.month}/{week_end.day}</div>',
+        f' ~ {week_end.month}/{week_end.day}  (월~금)</div>',
         unsafe_allow_html=True,
     )
 with wc4:
@@ -657,15 +711,16 @@ with wc4:
 with wc5:
     if st.button("오늘", key="wk_today"): st.session_state.wk_off = 0; st.rerun()
 
-DAY_NAMES = ["월","화","수","목","금","토","일"]
-day_cols  = st.columns(7, gap="small")
+DAY_NAMES = ["월", "화", "수", "목", "금"]   # 토·일 제외
+day_cols  = st.columns(5, gap="small")
 total_t   = done_t = 0
 
 for i, dc in enumerate(day_cols):
     cur_day   = week_start + timedelta(days=i)
     dk        = cur_day.strftime("%Y-%m-%d")
     is_today  = (cur_day == today_d)
-    day_tasks = tasks_load(dk)
+    # 오름차순(가나다) 정렬
+    day_tasks = sorted(tasks_load(dk), key=lambda x: x["text"])
     total_t  += len(day_tasks)
     done_t   += sum(1 for t in day_tasks if t.get("done"))
 
@@ -680,18 +735,46 @@ for i, dc in enumerate(day_cols):
         )
 
         for task in day_tasks:
-            tc, td2 = st.columns([5, 1])
-            with tc:
-                disp = task["text"][:14] + ("…" if len(task["text"]) > 14 else "")
-                new_done = st.checkbox(disp, value=task.get("done", False),
-                                       key=f"t_{dk}_{task['id']}", help=task["text"])
-                if new_done != task.get("done", False):
-                    tasks_toggle(task["id"], task["done"], dk)
-                    st.rerun()
-            with td2:
-                if st.button("✕", key=f"td_{dk}_{task['id']}"):
-                    tasks_delete(task["id"], dk)
-                    st.rerun()
+            edit_key = f"editing_{dk}_{task['id']}"
+            if st.session_state.get(edit_key):
+                # ── 수정 모드 ──
+                new_text = st.text_input(
+                    "", value=task["text"],
+                    key=f"edit_inp_{dk}_{task['id']}",
+                    label_visibility="collapsed",
+                )
+                sv1, sv2 = st.columns(2)
+                with sv1:
+                    if st.button("✓ 저장", key=f"save_{dk}_{task['id']}",
+                                 use_container_width=True):
+                        if new_text.strip():
+                            tasks_update(task["id"], dk, new_text.strip())
+                        st.session_state[edit_key] = False
+                        st.rerun()
+                with sv2:
+                    if st.button("✕ 취소", key=f"cancel_{dk}_{task['id']}",
+                                 use_container_width=True):
+                        st.session_state[edit_key] = False
+                        st.rerun()
+            else:
+                # ── 일반 표시 모드 ──
+                tc, te, td2 = st.columns([4, 1, 1])
+                with tc:
+                    disp = task["text"][:13] + ("…" if len(task["text"]) > 13 else "")
+                    new_done = st.checkbox(disp, value=task.get("done", False),
+                                           key=f"t_{dk}_{task['id']}", help=task["text"])
+                    if new_done != task.get("done", False):
+                        tasks_toggle(task["id"], task["done"], dk)
+                        st.rerun()
+                with te:
+                    if st.button("✏️", key=f"te_{dk}_{task['id']}",
+                                 help="수정"):
+                        st.session_state[edit_key] = True
+                        st.rerun()
+                with td2:
+                    if st.button("✕", key=f"td_{dk}_{task['id']}"):
+                        tasks_delete(task["id"], dk)
+                        st.rerun()
 
         with st.form(key=f"tf_{dk}", clear_on_submit=True):
             nt = st.text_input("", placeholder="업무 추가", label_visibility="collapsed")
