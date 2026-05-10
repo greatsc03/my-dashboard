@@ -2,6 +2,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 import json
 import os
+import csv
+import io
 import html as html_lib
 import base64
 from datetime import datetime, date, timedelta
@@ -322,6 +324,14 @@ def diary_all() -> list:
         pass
     all_d = _jload(DIARY_F, {})
     return [{"date": k, "content": v} for k, v in sorted(all_d.items(), reverse=True)]
+
+# ── CSV 생성 헬퍼 (Excel 호환 UTF-8 BOM) ─────────────────────────────────────
+def make_csv(headers: list, rows: list) -> bytes:
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(headers)
+    w.writerows(rows)
+    return ("﻿" + buf.getvalue()).encode("utf-8")   # BOM → 엑셀 한글 정상 표시
 
 # ── TRANSLATIONS ──────────────────────────────────────────────────────────────
 def tr_load():
@@ -721,20 +731,19 @@ with idea_col:
 
     ideas = ideas_load()
 
+    # CSV 다운로드 (Excel 호환)
     if ideas:
-        idea_lines = []
-        for item in ideas:
-            dt = item.get("created_at", "")[:16].replace("T", " ")
-            idea_lines.append(f"[{dt}]\n{item['text']}")
-        dl_idea = "\n\n".join(idea_lines)
+        rows = [[item.get("created_at","")[:16].replace("T"," "), item["text"]]
+                for item in ideas]
         st.download_button(
-            "⬇️ 전체 다운로드 (.txt)", dl_idea.encode("utf-8"),
-            f"ideas_{date.today()}.txt", "text/plain;charset=utf-8",
+            "⬇️ 전체 다운로드 (.csv)", make_csv(["날짜", "아이디어"], rows),
+            f"ideas_{date.today()}.csv", "text/csv;charset=utf-8",
             use_container_width=True, key="dl_ideas",
         )
 
-    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    for item in ideas[:50]:
+    # 최근 5개만 표시
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    for item in ideas[:5]:
         c1, c2 = st.columns([11, 1])
         with c1:
             dt = item.get("created_at", "")[:16].replace("T", " ")
@@ -750,6 +759,25 @@ with idea_col:
                 ideas_delete(item["id"])
                 st.rerun()
 
+    # 6번째 이후는 접기
+    if len(ideas) > 5:
+        with st.expander(f"더보기 ({len(ideas) - 5}개)"):
+            for item in ideas[5:]:
+                c1, c2 = st.columns([11, 1])
+                with c1:
+                    dt = item.get("created_at", "")[:16].replace("T", " ")
+                    st.markdown(f"""
+                    <div style="padding:9px 12px;background:#f8fafc;border-radius:9px;
+                                margin-bottom:6px;border-left:3px solid #c7d7fd">
+                      <div style="font-size:11px;color:#94a3b8;margin-bottom:3px">{dt}</div>
+                      <div style="font-size:12px;line-height:1.6;white-space:pre-wrap">
+                        {html_lib.escape(item['text'])}</div>
+                    </div>""", unsafe_allow_html=True)
+                with c2:
+                    if st.button("✕", key=f"del_idea_ex_{item['id']}", help="삭제"):
+                        ideas_delete(item["id"])
+                        st.rerun()
+
 # ── 다이어리 ──────────────────────────────────────────────────────────────────
 with diary_col:
     st.markdown('<div class="sec-lbl">📔 다이어리</div>', unsafe_allow_html=True)
@@ -764,7 +792,7 @@ with diary_col:
 
     existing = diary_load(date_str)
     content = st.text_area(
-        "", value=existing, height=230,
+        "", value=existing, height=200,
         placeholder="오늘의 생각, 느낌, 배운 것들을 자유롭게 기록해보세요...",
         label_visibility="collapsed",
         key=f"diary_{date_str}",
@@ -778,41 +806,48 @@ with diary_col:
             st.success("저장되었습니다!")
 
     all_diary = diary_all()
+
+    # CSV 다운로드 (Excel 호환)
     if all_diary:
-        diary_lines = []
+        d_rows = []
         for entry in all_diary:
             try:
                 d = datetime.strptime(entry["date"], "%Y-%m-%d")
-                header = f"{'='*32}\n{d.strftime('%Y년 %m월 %d일')} ({DAYS_KR[d.weekday()]})\n{'='*32}"
+                label = f"{d.strftime('%Y년 %m월 %d일')} ({DAYS_KR[d.weekday()]})"
             except Exception:
-                header = f"{'='*32}\n{entry['date']}\n{'='*32}"
-            diary_lines.append(f"{header}\n{entry.get('content','')}")
-        dl_diary = "\n\n".join(diary_lines)
+                label = entry["date"]
+            d_rows.append([label, entry.get("content", "")])
         with sv2:
             st.download_button(
-                "⬇️ 전체 다운로드", dl_diary.encode("utf-8"),
-                f"diary_{date.today()}.txt", "text/plain;charset=utf-8",
+                "⬇️ 전체 다운로드 (.csv)", make_csv(["날짜", "내용"], d_rows),
+                f"diary_{date.today()}.csv", "text/csv;charset=utf-8",
                 use_container_width=True, key="dl_diary",
             )
 
-    # 이전 기록 미리보기
-    prev = [e for e in all_diary if e["date"] != date_str]
-    if prev:
-        with st.expander(f"📚 이전 기록 ({len(prev)}건)"):
-            for entry in prev[:8]:
-                try:
-                    d = datetime.strptime(entry["date"], "%Y-%m-%d")
-                    lbl = f"{d.strftime('%Y.%m.%d')} ({DAYS_KR[d.weekday()]})"
-                except Exception:
-                    lbl = entry["date"]
-                preview = (entry.get("content") or "")[:80]
-                if len(entry.get("content","")) > 80:
-                    preview += "..."
-                st.markdown(f"""
-                <div style="padding:9px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px">
-                  <div style="font-size:11px;font-weight:700;color:#4361ee;margin-bottom:3px">{lbl}</div>
-                  <div style="font-size:12px;color:#475569;white-space:pre-wrap">{html_lib.escape(preview)}</div>
-                </div>""", unsafe_allow_html=True)
+    # 최근 5개 다이어리 목록 (현재 날짜 제외)
+    prev5 = [e for e in all_diary if e["date"] != date_str][:5]
+    if prev5:
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+        st.markdown('<div style="font-size:11px;font-weight:700;color:#94a3b8;'
+                    'text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">'
+                    '최근 기록</div>', unsafe_allow_html=True)
+        for entry in prev5:
+            try:
+                d = datetime.strptime(entry["date"], "%Y-%m-%d")
+                lbl = f"{d.strftime('%Y.%m.%d')} ({DAYS_KR[d.weekday()]})"
+            except Exception:
+                lbl = entry["date"]
+            preview = (entry.get("content") or "")[:70]
+            if len(entry.get("content", "")) > 70:
+                preview += "..."
+            st.markdown(f"""
+            <div style="padding:9px 13px;background:#f8fafc;border-radius:9px;
+                        margin-bottom:6px;border-left:3px solid #7c3aed">
+              <div style="font-size:11px;font-weight:700;color:#4361ee;
+                          margin-bottom:3px">{lbl}</div>
+              <div style="font-size:12px;color:#475569;white-space:pre-wrap;
+                          line-height:1.5">{html_lib.escape(preview)}</div>
+            </div>""", unsafe_allow_html=True)
 
 st.divider()
 
@@ -1092,14 +1127,13 @@ else:
     with ctrl2:
         # 대화 다운로드
         if st.session_state.chat_messages:
-            lines = []
-            for m in st.session_state.chat_messages:
-                who = "나" if m["role"] == "user" else "AI"
-                lines.append(f"[{who}]\n{m['content']}")
-            dl_txt = "\n\n".join(lines)
+            chat_rows = [
+                ["나" if m["role"] == "user" else "AI", m["content"]]
+                for m in st.session_state.chat_messages
+            ]
             st.download_button(
-                "⬇️ 저장", dl_txt.encode("utf-8"),
-                f"chat_{date.today()}.txt", "text/plain;charset=utf-8",
+                "⬇️ 저장 (.csv)", make_csv(["역할", "내용"], chat_rows),
+                f"chat_{date.today()}.csv", "text/csv;charset=utf-8",
                 use_container_width=True, key="dl_chat",
             )
     with ctrl3:
