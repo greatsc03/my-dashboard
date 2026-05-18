@@ -391,7 +391,6 @@ def image_save(img_bytes: bytes, ext: str = "png", slot: int = 0):
         (DATA_DIR / f"dashboard_img_{slot}.{ext}").write_bytes(img_bytes)
 
 def image_clear(slot: int):
-    """슬롯의 사진을 삭제."""
     key = f"image_b64_{slot}"
     db = _db()
     if db:
@@ -428,14 +427,13 @@ def set_photo_count(n: int):
     st.session_state.photo_count = n
 
 def _img_html(img_bytes: bytes, height: int = 220) -> str:
-    """이미지를 base64 HTML로 변환. 높이 고정, 원본 비율 유지."""
     import base64 as _b64
     hdr = img_bytes[:4]
-    if hdr == b'\x89PNG':          mime = 'image/png'
-    elif img_bytes[:3] == b'\xff\xd8\xff': mime = 'image/jpeg'
-    elif hdr[:6] in (b'GIF87a', b'GIF89a'): mime = 'image/gif'
-    elif hdr == b'RIFF':           mime = 'image/webp'
-    else:                          mime = 'image/jpeg'
+    if hdr == b'\x89PNG':                        mime = 'image/png'
+    elif img_bytes[:3] == b'\xff\xd8\xff':       mime = 'image/jpeg'
+    elif hdr[:6] in (b'GIF87a', b'GIF89a'):      mime = 'image/gif'
+    elif hdr == b'RIFF':                          mime = 'image/webp'
+    else:                                         mime = 'image/jpeg'
     b64 = _b64.b64encode(img_bytes).decode()
     return (
         f'<div style="height:{height}px;background:#f0ebfc;border-radius:10px;'
@@ -446,7 +444,6 @@ def _img_html(img_bytes: bytes, height: int = 220) -> str:
     )
 
 def remove_photo_slot(slot: int, count: int):
-    """해당 슬롯을 제거하고 이후 사진을 앞으로 당김."""
     for i in range(slot, count - 1):
         img = image_load(i + 1)
         if img:
@@ -474,16 +471,6 @@ st.markdown("""
 .block-container { padding-top: 0 !important; padding-bottom: 2rem !important }
 * { font-family: 'Malgun Gothic','Noto Sans KR','Segoe UI',sans-serif }
 
-.dash-hdr {
-    background: linear-gradient(120deg,#4361ee 0%,#7c3aed 55%,#a855f7 100%);
-    padding: 16px 32px; border-radius: 0 0 20px 20px; color: white;
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 22px; box-shadow: 0 4px 24px rgba(67,97,238,.28);
-}
-.dash-logo { font-size: 21px; font-weight: 700; letter-spacing: -.5px }
-.dash-sub  { font-size: 12px; opacity: .75; margin-top: 3px }
-.dash-time { font-size: 23px; font-weight: 700; text-align: right }
-.dash-date { font-size: 12px; opacity: .82; text-align: right; margin-top: 2px }
 .sec-lbl {
     font-size: 11px; font-weight: 700; color: #64748b;
     text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
@@ -581,593 +568,587 @@ else:
     st.caption("💻 로컬 모드 — 이 컴퓨터에서만 저장됩니다")
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# SECTION 1 — QUOTE  (전체 너비)
-# ═════════════════════════════════════════════════════════════════════════════
-quotes = quotes_load()
-if not quotes:
-    quotes_add(DEF_QUOTES[0]["text"], DEF_QUOTES[0]["author"])
-    st.rerun()
-
-# 모든 글귀를 구분선과 함께 하나의 카드에 표시
-items_html = ""
-for i, q in enumerate(quotes):
-    sep = '<hr style="border:none;border-top:1px solid rgba(255,255,255,.18);margin:18px 0">' \
-          if i < len(quotes) - 1 else ""
-    items_html += f'<div class="q-text">{html_lib.escape(q["text"])}</div>{sep}'
-
-st.markdown(f"""
-<div class="q-card">
-  <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.65);
-              text-transform:uppercase;letter-spacing:1px;margin-bottom:20px">
-    🌿 인생의 지혜
-  </div>
-  {items_html}
-</div>
-""", unsafe_allow_html=True)
-
-with st.expander("📚 지혜 창고"):
-    for qi in quotes:
-        ec1, ec2, ec3 = st.columns([5, 3, 1])
-        with ec1:
-            st.text_area("", value=qi["text"], key=f"qt_{qi['id']}",
-                         label_visibility="collapsed", height=90)
-        with ec2:
-            st.text_input("", value=qi.get("author",""), key=f"qa_{qi['id']}",
-                          placeholder="출처/작가", label_visibility="collapsed")
-        with ec3:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            if st.button("✕", key=f"qdel_{qi['id']}"):
-                quotes_delete(qi["id"])
-                st.rerun()
-
-    if st.button("💾 편집 내용 저장", key="qsave"):
-        for qi in quotes:
-            t = st.session_state.get(f"qt_{qi['id']}", "").strip()
-            a = st.session_state.get(f"qa_{qi['id']}", "").strip()
-            if t:
-                quotes_update(qi["id"], t, a)
-        st.success("저장되었습니다!")
-        st.rerun()
-
-    st.divider()
-    with st.form("add_quote", clear_on_submit=True):
-        ac1, ac2, ac3 = st.columns([5, 3, 1])
-        with ac1:
-            nqt = st.text_input("", placeholder="새 글귀 내용", label_visibility="collapsed")
-        with ac2:
-            nqa = st.text_input("", placeholder="출처/작가", label_visibility="collapsed")
-        with ac3:
-            if st.form_submit_button("+ 추가") and nqt.strip():
-                quotes_add(nqt.strip(), nqa.strip())
-                st.rerun()
-
-# ═════════════════════════════════════════════════════════════════════════════
-# SECTION 1-B — 꿈 갤러리 (동적 사진 개수)
-# ═════════════════════════════════════════════════════════════════════════════
-photo_count = get_photo_count()
-
-lbl_c, add_c = st.columns([6, 1])
-with lbl_c:
-    st.markdown('<div class="sec-lbl" style="margin-top:18px">🌠 나의 꿈 갤러리</div>',
-                unsafe_allow_html=True)
-with add_c:
-    if st.button("＋ 추가", key="ph_add", use_container_width=True):
-        set_photo_count(photo_count + 1)
-        st.rerun()
-
-PER_ROW = 3
-for row_start in range(0, photo_count, PER_ROW):
-    row_slots = list(range(row_start, min(row_start + PER_ROW, photo_count)))
-    cols = st.columns(len(row_slots), gap="medium")
-
-    for slot, col in zip(row_slots, cols):
-        with col:
-            img_bytes = image_load(slot)
-            if img_bytes:
-                # 높이 고정(220px), 원본 비율 유지
-                st.markdown(_img_html(img_bytes, height=220), unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style="height:220px;background:#f0ebfc;border-radius:10px;
-                            display:flex;flex-direction:column;align-items:center;
-                            justify-content:center;gap:6px;color:#625A73">
-                  <span style="font-size:34px;opacity:.4">🌄</span>
-                  <span style="font-size:11px">사진 {slot+1}</span>
-                </div>""", unsafe_allow_html=True)
-
-            # 버튼: 평소엔 작게, 클릭 시 업로더 토글
-            b1, b2 = st.columns([1, 1])
-            with b1:
-                lbl = "📷 닫기" if st.session_state.get(f"show_up_{slot}") else "📷 변경"
-                if st.button(lbl, key=f"ph_toggle_{slot}", use_container_width=True):
-                    st.session_state[f"show_up_{slot}"] = not st.session_state.get(f"show_up_{slot}", False)
-                    st.rerun()
-            with b2:
-                if photo_count > 1:
-                    if st.button("✕ 삭제", key=f"ph_del_{slot}", use_container_width=True):
-                        remove_photo_slot(slot, photo_count)
-                        # 관련 토글 상태 정리
-                        for k in list(st.session_state.keys()):
-                            if k.startswith("show_up_") or k.startswith("ph_toggle_"):
-                                del st.session_state[k]
-                        st.rerun()
-
-            if st.session_state.get(f"show_up_{slot}", False):
-                uploaded = st.file_uploader(
-                    f"사진 {slot+1} 선택",
-                    type=["jpg","jpeg","png","gif","webp"],
-                    key=f"img_up_{slot}",
-                    label_visibility="collapsed",
-                )
-                if uploaded is not None:
-                    ext = uploaded.name.rsplit(".", 1)[-1].lower()
-                    if ext not in {"png","jpg","jpeg","gif","webp"}:
-                        ext = "png"
-                    image_save(uploaded.getvalue(), ext, slot)
-                    st.session_state[f"show_up_{slot}"] = False
-                    st.rerun()
-
-st.divider()
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# SECTION 1-C — 💡 아이디어 노트  +  📔 다이어리
-# ═════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE FUNCTIONS
+# ─────────────────────────────────────────────────────────────────────────────
 DAYS_KR = ["월","화","수","목","금","토","일"]
 
-idea_col, diary_col = st.columns([1, 1], gap="large")
 
-# ── 아이디어 노트 ──────────────────────────────────────────────────────────────
-with idea_col:
-    st.markdown('<div class="sec-lbl">💡 아이디어 노트</div>', unsafe_allow_html=True)
-
-    with st.form("add_idea", clear_on_submit=True):
-        idea_txt = st.text_area(
-            "", placeholder="번뜩이는 아이디어를 바로 적어두세요...",
-            height=95, label_visibility="collapsed", key="idea_inp",
-        )
-        if st.form_submit_button("💾 저장", use_container_width=True) and idea_txt.strip():
-            ideas_add(idea_txt.strip())
-            st.rerun()
-
-    ideas = ideas_load()
-
-    # CSV 다운로드 (Excel 호환)
-    if ideas:
-        rows = [[item.get("created_at","")[:16].replace("T"," "), item["text"]]
-                for item in ideas]
-        st.download_button(
-            "⬇️ 전체 다운로드 (.csv)", make_csv(["날짜", "아이디어"], rows),
-            f"ideas_{date.today()}.csv", "text/csv;charset=utf-8",
-            use_container_width=True, key="dl_ideas",
-        )
-
-    # 최근 5개만 표시
-    def _idea_card(item, key_suffix=""):
-        c1, c2 = st.columns([11, 1])
-        with c1:
-            dt = item.get("created_at", "")[:16].replace("T", " ")
-            st.markdown(f"""
-            <div style="padding:5px 10px 6px;background:#f8fafc;border-radius:8px;
-                        margin-bottom:4px;border-left:3px solid #4361ee">
-              <div style="font-size:10px;color:#b0bbd4;margin-bottom:1px">{dt}</div>
-              <div style="font-size:13px;line-height:1.45;white-space:pre-wrap">
-                {html_lib.escape(item['text'])}</div>
-            </div>""", unsafe_allow_html=True)
-        with c2:
-            if st.button("✕", key=f"del_idea{key_suffix}_{item['id']}", help="삭제"):
-                ideas_delete(item["id"])
-                st.rerun()
-
-    for item in ideas[:5]:
-        _idea_card(item)
-
-    # 6번째 이후는 접기
-    if len(ideas) > 5:
-        with st.expander(f"더보기 ({len(ideas) - 5}개)"):
-            for item in ideas[5:]:
-                _idea_card(item, key_suffix="_ex")
-
-# ── 다이어리 ──────────────────────────────────────────────────────────────────
-with diary_col:
-    st.markdown('<div class="sec-lbl">📔 다이어리</div>', unsafe_allow_html=True)
-
-    diary_date = st.date_input(
-        "", value=date.today(),
-        label_visibility="collapsed", key="diary_date_sel",
-    )
-    date_str = diary_date.strftime("%Y-%m-%d")
-    dn = DAYS_KR[diary_date.weekday()]
-    st.caption(f"📅 {diary_date.strftime('%Y년 %m월 %d일')} ({dn})")
-
-    existing = diary_load(date_str)
-    content = st.text_area(
-        "", value=existing, height=200,
-        placeholder="오늘의 생각, 느낌, 배운 것들을 자유롭게 기록해보세요...",
-        label_visibility="collapsed",
-        key=f"diary_{date_str}",
-    )
-
-    sv1, sv2 = st.columns(2)
-    with sv1:
-        if st.button("💾 저장", key="diary_save_btn",
-                     use_container_width=True, type="primary"):
-            diary_save(date_str, content)
-            st.success("저장되었습니다!")
-
-    all_diary = diary_all()
-
-    # CSV 다운로드 (Excel 호환)
-    if all_diary:
-        d_rows = []
-        for entry in all_diary:
-            try:
-                d = datetime.strptime(entry["date"], "%Y-%m-%d")
-                label = f"{d.strftime('%Y년 %m월 %d일')} ({DAYS_KR[d.weekday()]})"
-            except Exception:
-                label = entry["date"]
-            d_rows.append([label, entry.get("content", "")])
-        with sv2:
-            st.download_button(
-                "⬇️ 전체 다운로드 (.csv)", make_csv(["날짜", "내용"], d_rows),
-                f"diary_{date.today()}.csv", "text/csv;charset=utf-8",
-                use_container_width=True, key="dl_diary",
-            )
-
-    # 최근 5개 다이어리 목록 (현재 날짜 제외)
-    prev5 = [e for e in all_diary if e["date"] != date_str][:5]
-    if prev5:
-        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-        st.markdown('<div style="font-size:11px;font-weight:700;color:#94a3b8;'
-                    'text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">'
-                    '최근 기록</div>', unsafe_allow_html=True)
-        for entry in prev5:
-            try:
-                d = datetime.strptime(entry["date"], "%Y-%m-%d")
-                lbl = f"{d.strftime('%Y.%m.%d')} ({DAYS_KR[d.weekday()]})"
-            except Exception:
-                lbl = entry["date"]
-            preview = (entry.get("content") or "")[:70]
-            if len(entry.get("content", "")) > 70:
-                preview += "..."
-            st.markdown(f"""
-            <div style="padding:9px 13px;background:#f8fafc;border-radius:9px;
-                        margin-bottom:6px;border-left:3px solid #7c3aed">
-              <div style="font-size:11px;font-weight:700;color:#4361ee;
-                          margin-bottom:3px">{lbl}</div>
-              <div style="font-size:12px;color:#475569;white-space:pre-wrap;
-                          line-height:1.5">{html_lib.escape(preview)}</div>
-            </div>""", unsafe_allow_html=True)
-
-st.divider()
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# SECTION 2 — GOALS
-# ═════════════════════════════════════════════════════════════════════════════
-col_26, col_30 = st.columns(2, gap="medium")
-
-
-def render_goals(year: str, col, icon: str):
-    with col:
-        st.markdown(f'<div class="sec-lbl">{icon} {year}년 목표</div>', unsafe_allow_html=True)
-        g_list = goals_load(year)
-        done_n  = sum(1 for g in g_list if g.get("done"))
-        total_n = len(g_list)
-        if total_n:
-            st.progress(done_n / total_n)
-            st.caption(f"{done_n} / {total_n} 달성")
-
-        for g in g_list:
-            rc, rd = st.columns([10, 1])
-            with rc:
-                new_val = st.checkbox(g["text"], value=g.get("done", False),
-                                      key=f"g_{year}_{g['id']}")
-                if new_val != g.get("done", False):
-                    goals_toggle(g["id"], g["done"], year)
-                    st.rerun()
-            with rd:
-                if st.button("✕", key=f"gd_{year}_{g['id']}"):
-                    goals_delete(g["id"], year)
-                    st.rerun()
-
-        with st.form(f"add_goal_{year}", clear_on_submit=True):
-            gc1, gc2 = st.columns([5, 1])
-            with gc1:
-                ng = st.text_input("", placeholder=f"{year}년 목표를 입력하세요",
-                                   label_visibility="collapsed")
-            with gc2:
-                if st.form_submit_button("+") and ng.strip():
-                    goals_add(year, ng.strip())
-                    st.rerun()
-
-
-render_goals("2026", col_26, "🎯")
-render_goals("2030", col_30, "🌟")
-
-st.divider()
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# SECTION 3 — TRANSLATION & ENGLISH STUDY
-# ═════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="sec-lbl">🌐 번역 &amp; 영어 학습</div>', unsafe_allow_html=True)
-
-if not API_KEY:
-    st.warning("⚠️ ANTHROPIC_API_KEY가 없습니다. Streamlit Cloud Secrets 또는 .env 파일을 확인해주세요.")
-
-mc1, mc2 = st.columns([3, 2])
-with mc1:
-    tr_mode = st.radio("모드", ["번역","해석 / 설명","어휘 분석"],
-                        horizontal=True, label_visibility="collapsed", key="tr_mode")
-with mc2:
-    lang_dir = st.selectbox("언어", ["🇰🇷 한국어 → 🇬🇧 영어","🇬🇧 영어 → 🇰🇷 한국어"],
-                             label_visibility="collapsed", key="tr_lang")
-
-ic1, ic2, ic3 = st.columns([8, 1, 8], gap="small")
-
-with ic1:
-    src_lbl = "🇰🇷 한국어 입력" if "한국어" in lang_dir.split("→")[0] else "🇬🇧 영어 입력"
-    st.caption(src_lbl)
-    src_text = st.text_area("", placeholder="번역할 텍스트를 입력하세요...",
-                             height=155, label_visibility="collapsed", key="tr_src")
-
-with ic2:
-    st.markdown("<div style='height:42px'></div>", unsafe_allow_html=True)
-    do_tr = st.button("▶▶", key="do_tr", use_container_width=True)
-    if st.button("✕", key="clear_tr", use_container_width=True):
-        st.session_state.tr_result = ""
+def page_dashboard():
+    # ═════════════════════════════════════════════════════════════════════════
+    # SECTION 1 — QUOTE  (전체 너비)
+    # ═════════════════════════════════════════════════════════════════════════
+    quotes = quotes_load()
+    if not quotes:
+        quotes_add(DEF_QUOTES[0]["text"], DEF_QUOTES[0]["author"])
         st.rerun()
 
-with ic3:
-    tgt_lbl = "🇬🇧 영어 결과" if "한국어" in lang_dir.split("→")[0] else "🇰🇷 한국어 결과"
-    st.caption(tgt_lbl)
-    res = st.session_state.get("tr_result", "")
-    if res:
-        st.markdown(f'<div class="tr-result">{html_lib.escape(res)}</div>', unsafe_allow_html=True)
-        sc1, sc2 = st.columns(2)
-        with sc1:
-            if st.button("💾 저장", key="tr_save"):
-                tr_add(src_text, res, tr_mode, now.strftime("%Y-%m-%d"))
-                st.success("저장됨!")
-        with sc2:
-            st.caption("결과를 드래그하여 복사")
-    else:
-        st.markdown('<div class="tr-result tr-empty">번역 결과가 여기에 표시됩니다...</div>',
-                    unsafe_allow_html=True)
+    items_html = ""
+    for i, q in enumerate(quotes):
+        sep = '<hr style="border:none;border-top:1px solid rgba(255,255,255,.18);margin:18px 0">' \
+              if i < len(quotes) - 1 else ""
+        items_html += f'<div class="q-text">{html_lib.escape(q["text"])}</div>{sep}'
 
-if do_tr:
-    if not src_text.strip():
-        st.warning("텍스트를 입력해주세요.")
-    elif not API_KEY:
-        st.error("API 키가 필요합니다.")
-    else:
-        sl = "한국어" if "한국어" in lang_dir.split("→")[0] else "영어"
-        tl = "영어" if sl == "한국어" else "한국어"
-        prompts = {
-            "번역": f"다음 {sl} 텍스트를 {tl}로 번역해주세요. 번역문만 출력하세요.\n\n{src_text}",
-            "해석 / 설명": f"다음 텍스트를 분석해주세요:\n1. 의미 설명\n2. 뉘앙스/문화적 맥락\n3. {tl} 번역\n\n텍스트: {src_text}",
-            "어휘 분석": f"다음 텍스트의 주요 어휘를 분석해주세요:\n1. 핵심 단어/표현 (원문→번역→예문)\n2. 유용한 관용 표현이나 문법 포인트\n\n텍스트: {src_text}",
-        }
-        with st.spinner("Claude가 번역 중입니다..."):
-            try:
-                client = anthropic.Anthropic(api_key=API_KEY)
-                msg = client.messages.create(
-                    model="claude-haiku-4-5-20251001", max_tokens=1500,
-                    messages=[{"role": "user", "content": prompts[tr_mode]}],
-                )
-                st.session_state.tr_result = msg.content[0].text
-                st.rerun()
-            except Exception as e:
-                st.error(f"번역 오류: {e}")
+    st.markdown(f"""
+    <div class="q-card">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.65);
+                  text-transform:uppercase;letter-spacing:1px;margin-bottom:20px">
+        🌿 인생의 지혜
+      </div>
+      {items_html}
+    </div>
+    """, unsafe_allow_html=True)
 
-saved_tr = tr_load()
-if saved_tr:
-    with st.expander(f"📚 저장된 번역 / 학습 기록  ({len(saved_tr)}건)"):
-        for i, item in enumerate(saved_tr[:10]):
-            sa, sb = st.columns([7, 1])
-            with sa:
-                prev = item["src"][:80] + ("..." if len(item["src"]) > 80 else "")
-                st.markdown(
-                    f'<div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px">'
-                    f'<span style="font-size:11px;color:#94a3b8">{item["date"]} · {item["mode"]}</span><br>'
-                    f'<span style="font-size:13px">{html_lib.escape(prev)}</span></div>',
-                    unsafe_allow_html=True,
-                )
-            with sb:
-                if st.button("불러오기", key=f"load_tr_{i}"):
-                    st.session_state.tr_result = item["result"]
+    with st.expander("📚 지혜 창고"):
+        for qi in quotes:
+            ec1, ec2, ec3 = st.columns([5, 3, 1])
+            with ec1:
+                st.text_area("", value=qi["text"], key=f"qt_{qi['id']}",
+                             label_visibility="collapsed", height=90)
+            with ec2:
+                st.text_input("", value=qi.get("author",""), key=f"qa_{qi['id']}",
+                              placeholder="출처/작가", label_visibility="collapsed")
+            with ec3:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                if st.button("✕", key=f"qdel_{qi['id']}"):
+                    quotes_delete(qi["id"])
                     st.rerun()
 
-st.divider()
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# SECTION 4 — WEEKLY PLANNER
-# ═════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="sec-lbl">📅 주간 계획</div>', unsafe_allow_html=True)
-
-today_d    = date.today()
-week_start = today_d - timedelta(days=today_d.weekday()) + timedelta(weeks=st.session_state.wk_off)
-week_end   = week_start + timedelta(days=4)   # 금요일까지 (5일)
-
-wc1, wc2, wc3, wc4, wc5 = st.columns([1, 1, 4, 1, 1])
-with wc1:
-    if st.button("◀", key="wk_prev"): st.session_state.wk_off -= 1; st.rerun()
-with wc3:
-    st.markdown(
-        f'<div style="text-align:center;font-weight:700;font-size:14px;padding:7px 0">'
-        f'{week_start.year}년 {week_start.month}/{week_start.day}'
-        f' ~ {week_end.month}/{week_end.day}  (월~금)</div>',
-        unsafe_allow_html=True,
-    )
-with wc4:
-    if st.button("▶", key="wk_next"): st.session_state.wk_off += 1; st.rerun()
-with wc5:
-    if st.button("오늘", key="wk_today"): st.session_state.wk_off = 0; st.rerun()
-
-DAY_NAMES = ["월", "화", "수", "목", "금"]   # 토·일 제외
-day_cols  = st.columns(5, gap="small")
-total_t   = done_t = 0
-
-for i, dc in enumerate(day_cols):
-    cur_day   = week_start + timedelta(days=i)
-    dk        = cur_day.strftime("%Y-%m-%d")
-    is_today  = (cur_day == today_d)
-    # 오름차순(가나다) 정렬
-    day_tasks = sorted(tasks_load(dk), key=lambda x: x["text"])
-    total_t  += len(day_tasks)
-    done_t   += sum(1 for t in day_tasks if t.get("done"))
-
-    with dc:
-        cls = "td" if is_today else "nd"
-        dt_html = (f'<div class="d-dt-today">{cur_day.day}</div>'
-                   if is_today else f'<div class="d-dt">{cur_day.day}</div>')
-        st.markdown(
-            f'<div class="day-hd {cls}"><div class="d-nm {cls}">{DAY_NAMES[i]}</div>'
-            f'{dt_html}</div>',
-            unsafe_allow_html=True,
-        )
-
-        for task in day_tasks:
-            edit_key = f"editing_{dk}_{task['id']}"
-            if st.session_state.get(edit_key):
-                # ── 수정 모드 ──
-                new_text = st.text_input(
-                    "", value=task["text"],
-                    key=f"edit_inp_{dk}_{task['id']}",
-                    label_visibility="collapsed",
-                )
-                sv1, sv2 = st.columns(2)
-                with sv1:
-                    if st.button("✓ 저장", key=f"save_{dk}_{task['id']}",
-                                 use_container_width=True):
-                        if new_text.strip():
-                            tasks_update(task["id"], dk, new_text.strip())
-                        st.session_state[edit_key] = False
-                        st.rerun()
-                with sv2:
-                    if st.button("✕ 취소", key=f"cancel_{dk}_{task['id']}",
-                                 use_container_width=True):
-                        st.session_state[edit_key] = False
-                        st.rerun()
-            else:
-                # ── 일반 표시 모드 ──
-                tc, te, td2 = st.columns([4, 1, 1])
-                with tc:
-                    disp = task["text"][:13] + ("…" if len(task["text"]) > 13 else "")
-                    new_done = st.checkbox(disp, value=task.get("done", False),
-                                           key=f"t_{dk}_{task['id']}", help=task["text"])
-                    if new_done != task.get("done", False):
-                        tasks_toggle(task["id"], task["done"], dk)
-                        st.rerun()
-                with te:
-                    if st.button("✏️", key=f"te_{dk}_{task['id']}",
-                                 help="수정"):
-                        st.session_state[edit_key] = True
-                        st.rerun()
-                with td2:
-                    if st.button("✕", key=f"td_{dk}_{task['id']}"):
-                        tasks_delete(task["id"], dk)
-                        st.rerun()
-
-        with st.form(key=f"tf_{dk}", clear_on_submit=True):
-            nt = st.text_input("", placeholder="업무 추가", label_visibility="collapsed")
-            if st.form_submit_button("+ 추가", use_container_width=True) and nt.strip():
-                tasks_add(dk, nt.strip())
-                st.rerun()
-
-st.markdown(
-    f'<div class="sum-row">이번 주 진행:'
-    f'<span class="sum-badge">{done_t}/{total_t}</span>업무 완료</div>',
-    unsafe_allow_html=True,
-)
-
-st.divider()
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# SECTION 5 — 🤖 AI 채팅
-# ═════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="sec-lbl">🤖 AI 채팅</div>', unsafe_allow_html=True)
-
-if not API_KEY:
-    st.warning("⚠️ ANTHROPIC_API_KEY가 없습니다. Streamlit Cloud Secrets를 확인해주세요.")
-else:
-    # ── 세션 초기화 ──────────────────────────────────────────────────────────
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-
-    ROLES = {
-        "🤝 일반 어시스턴트":  "당신은 친절하고 유능한 AI 어시스턴트입니다. 한국어로 대화하세요.",
-        "💼 비즈니스 코치":    "당신은 경험 많은 비즈니스 코치입니다. 실용적이고 구체적인 조언을 한국어로 제공하세요.",
-        "📚 학습 도우미":      "당신은 친절한 학습 도우미입니다. 개념을 쉽고 명확하게 설명하며 한국어로 대화하세요.",
-        "✍️ 글쓰기 도우미":   "당신은 전문 작가이자 편집자입니다. 글쓰기와 표현에 대해 구체적으로 도움을 주세요. 한국어로 대화하세요.",
-        "💡 아이디어 파트너":  "당신은 창의적인 브레인스토밍 파트너입니다. 다양한 관점에서 아이디어를 발전시켜 주세요. 한국어로 대화하세요.",
-    }
-
-    # ── 상단 컨트롤 ──────────────────────────────────────────────────────────
-    ctrl1, ctrl2, ctrl3 = st.columns([4, 1, 1])
-    with ctrl1:
-        role_key = st.selectbox(
-            "AI 역할", list(ROLES.keys()),
-            label_visibility="collapsed", key="chat_role",
-        )
-        system_prompt = ROLES[role_key]
-    with ctrl2:
-        # 대화 다운로드
-        if st.session_state.chat_messages:
-            chat_rows = [
-                ["나" if m["role"] == "user" else "AI", m["content"]]
-                for m in st.session_state.chat_messages
-            ]
-            st.download_button(
-                "⬇️ 저장 (.csv)", make_csv(["역할", "내용"], chat_rows),
-                f"chat_{date.today()}.csv", "text/csv;charset=utf-8",
-                use_container_width=True, key="dl_chat",
-            )
-    with ctrl3:
-        if st.button("🗑️ 초기화", use_container_width=True, key="chat_clear"):
-            st.session_state.chat_messages = []
+        if st.button("💾 편집 내용 저장", key="qsave"):
+            for qi in quotes:
+                t = st.session_state.get(f"qt_{qi['id']}", "").strip()
+                a = st.session_state.get(f"qa_{qi['id']}", "").strip()
+                if t:
+                    quotes_update(qi["id"], t, a)
+            st.success("저장되었습니다!")
             st.rerun()
 
-    # ── 대화 내역 표시 ────────────────────────────────────────────────────────
-    chat_box = st.container()
-    with chat_box:
-        for msg in st.session_state.chat_messages:
-            with st.chat_message(msg["role"],
-                                 avatar="🧑" if msg["role"] == "user" else "🤖"):
-                st.markdown(msg["content"])
+        st.divider()
+        with st.form("add_quote", clear_on_submit=True):
+            ac1, ac2, ac3 = st.columns([5, 3, 1])
+            with ac1:
+                nqt = st.text_input("", placeholder="새 글귀 내용", label_visibility="collapsed")
+            with ac2:
+                nqa = st.text_input("", placeholder="출처/작가", label_visibility="collapsed")
+            with ac3:
+                if st.form_submit_button("+ 추가") and nqt.strip():
+                    quotes_add(nqt.strip(), nqa.strip())
+                    st.rerun()
 
-    # ── 메시지 입력 (항상 화면 하단 고정) ────────────────────────────────────
-    if prompt := st.chat_input("무엇이든 물어보세요..."):
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+    # ═════════════════════════════════════════════════════════════════════════
+    # SECTION 1-B — 꿈 갤러리 (동적 사진 개수)
+    # ═════════════════════════════════════════════════════════════════════════
+    photo_count = get_photo_count()
 
-        with chat_box:
-            with st.chat_message("user", avatar="🧑"):
-                st.markdown(prompt)
+    lbl_c, add_c = st.columns([6, 1])
+    with lbl_c:
+        st.markdown('<div class="sec-lbl" style="margin-top:18px">🌠 나의 꿈 갤러리</div>',
+                    unsafe_allow_html=True)
+    with add_c:
+        if st.button("＋ 추가", key="ph_add", use_container_width=True):
+            set_photo_count(photo_count + 1)
+            st.rerun()
 
-            with st.chat_message("assistant", avatar="🤖"):
+    PER_ROW = 3
+    for row_start in range(0, photo_count, PER_ROW):
+        row_slots = list(range(row_start, min(row_start + PER_ROW, photo_count)))
+        cols = st.columns(len(row_slots), gap="medium")
+
+        for slot, col in zip(row_slots, cols):
+            with col:
+                img_bytes = image_load(slot)
+                if img_bytes:
+                    st.markdown(_img_html(img_bytes, height=220), unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="height:220px;background:#f0ebfc;border-radius:10px;
+                                display:flex;flex-direction:column;align-items:center;
+                                justify-content:center;gap:6px;color:#625A73">
+                      <span style="font-size:34px;opacity:.4">🌄</span>
+                      <span style="font-size:11px">사진 {slot+1}</span>
+                    </div>""", unsafe_allow_html=True)
+
+                b1, b2 = st.columns([1, 1])
+                with b1:
+                    lbl = "📷 닫기" if st.session_state.get(f"show_up_{slot}") else "📷 변경"
+                    if st.button(lbl, key=f"ph_toggle_{slot}", use_container_width=True):
+                        st.session_state[f"show_up_{slot}"] = not st.session_state.get(f"show_up_{slot}", False)
+                        st.rerun()
+                with b2:
+                    if photo_count > 1:
+                        if st.button("✕ 삭제", key=f"ph_del_{slot}", use_container_width=True):
+                            remove_photo_slot(slot, photo_count)
+                            for k in list(st.session_state.keys()):
+                                if k.startswith("show_up_") or k.startswith("ph_toggle_"):
+                                    del st.session_state[k]
+                            st.rerun()
+
+                if st.session_state.get(f"show_up_{slot}", False):
+                    uploaded = st.file_uploader(
+                        f"사진 {slot+1} 선택",
+                        type=["jpg","jpeg","png","gif","webp"],
+                        key=f"img_up_{slot}",
+                        label_visibility="collapsed",
+                    )
+                    if uploaded is not None:
+                        ext = uploaded.name.rsplit(".", 1)[-1].lower()
+                        if ext not in {"png","jpg","jpeg","gif","webp"}:
+                            ext = "png"
+                        image_save(uploaded.getvalue(), ext, slot)
+                        st.session_state[f"show_up_{slot}"] = False
+                        st.rerun()
+
+    st.divider()
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # SECTION 2 — GOALS
+    # ═════════════════════════════════════════════════════════════════════════
+    col_26, col_30 = st.columns(2, gap="medium")
+
+    def render_goals(year: str, col, icon: str):
+        with col:
+            st.markdown(f'<div class="sec-lbl">{icon} {year}년 목표</div>', unsafe_allow_html=True)
+            g_list = goals_load(year)
+            done_n  = sum(1 for g in g_list if g.get("done"))
+            total_n = len(g_list)
+            if total_n:
+                st.progress(done_n / total_n)
+                st.caption(f"{done_n} / {total_n} 달성")
+
+            for g in g_list:
+                rc, rd = st.columns([10, 1])
+                with rc:
+                    new_val = st.checkbox(g["text"], value=g.get("done", False),
+                                          key=f"g_{year}_{g['id']}")
+                    if new_val != g.get("done", False):
+                        goals_toggle(g["id"], g["done"], year)
+                        st.rerun()
+                with rd:
+                    if st.button("✕", key=f"gd_{year}_{g['id']}"):
+                        goals_delete(g["id"], year)
+                        st.rerun()
+
+            with st.form(f"add_goal_{year}", clear_on_submit=True):
+                gc1, gc2 = st.columns([5, 1])
+                with gc1:
+                    ng = st.text_input("", placeholder=f"{year}년 목표를 입력하세요",
+                                       label_visibility="collapsed")
+                with gc2:
+                    if st.form_submit_button("+") and ng.strip():
+                        goals_add(year, ng.strip())
+                        st.rerun()
+
+    render_goals("2026", col_26, "🎯")
+    render_goals("2030", col_30, "🌟")
+
+    st.divider()
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # SECTION 4 — WEEKLY PLANNER
+    # ═════════════════════════════════════════════════════════════════════════
+    st.markdown('<div class="sec-lbl">📅 주간 계획</div>', unsafe_allow_html=True)
+
+    today_d    = date.today()
+    week_start = today_d - timedelta(days=today_d.weekday()) + timedelta(weeks=st.session_state.wk_off)
+    week_end   = week_start + timedelta(days=4)   # 금요일까지 (5일)
+
+    wc1, wc2, wc3, wc4, wc5 = st.columns([1, 1, 4, 1, 1])
+    with wc1:
+        if st.button("◀", key="wk_prev"): st.session_state.wk_off -= 1; st.rerun()
+    with wc3:
+        st.markdown(
+            f'<div style="text-align:center;font-weight:700;font-size:14px;padding:7px 0">'
+            f'{week_start.year}년 {week_start.month}/{week_start.day}'
+            f' ~ {week_end.month}/{week_end.day}  (월~금)</div>',
+            unsafe_allow_html=True,
+        )
+    with wc4:
+        if st.button("▶", key="wk_next"): st.session_state.wk_off += 1; st.rerun()
+    with wc5:
+        if st.button("오늘", key="wk_today"): st.session_state.wk_off = 0; st.rerun()
+
+    DAY_NAMES = ["월", "화", "수", "목", "금"]
+    day_cols  = st.columns(5, gap="small")
+    total_t   = done_t = 0
+
+    for i, dc in enumerate(day_cols):
+        cur_day   = week_start + timedelta(days=i)
+        dk        = cur_day.strftime("%Y-%m-%d")
+        is_today  = (cur_day == today_d)
+        day_tasks = sorted(tasks_load(dk), key=lambda x: x["text"])
+        total_t  += len(day_tasks)
+        done_t   += sum(1 for t in day_tasks if t.get("done"))
+
+        with dc:
+            cls = "td" if is_today else "nd"
+            dt_html = (f'<div class="d-dt-today">{cur_day.day}</div>'
+                       if is_today else f'<div class="d-dt">{cur_day.day}</div>')
+            st.markdown(
+                f'<div class="day-hd {cls}"><div class="d-nm {cls}">{DAY_NAMES[i]}</div>'
+                f'{dt_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+            for task in day_tasks:
+                edit_key = f"editing_{dk}_{task['id']}"
+                if st.session_state.get(edit_key):
+                    new_text = st.text_input(
+                        "", value=task["text"],
+                        key=f"edit_inp_{dk}_{task['id']}",
+                        label_visibility="collapsed",
+                    )
+                    sv1, sv2 = st.columns(2)
+                    with sv1:
+                        if st.button("✓ 저장", key=f"save_{dk}_{task['id']}",
+                                     use_container_width=True):
+                            if new_text.strip():
+                                tasks_update(task["id"], dk, new_text.strip())
+                            st.session_state[edit_key] = False
+                            st.rerun()
+                    with sv2:
+                        if st.button("✕ 취소", key=f"cancel_{dk}_{task['id']}",
+                                     use_container_width=True):
+                            st.session_state[edit_key] = False
+                            st.rerun()
+                else:
+                    tc, te, td2 = st.columns([4, 1, 1])
+                    with tc:
+                        disp = task["text"][:13] + ("…" if len(task["text"]) > 13 else "")
+                        new_done = st.checkbox(disp, value=task.get("done", False),
+                                               key=f"t_{dk}_{task['id']}", help=task["text"])
+                        if new_done != task.get("done", False):
+                            tasks_toggle(task["id"], task["done"], dk)
+                            st.rerun()
+                    with te:
+                        if st.button("✏️", key=f"te_{dk}_{task['id']}", help="수정"):
+                            st.session_state[edit_key] = True
+                            st.rerun()
+                    with td2:
+                        if st.button("✕", key=f"td_{dk}_{task['id']}"):
+                            tasks_delete(task["id"], dk)
+                            st.rerun()
+
+            with st.form(key=f"tf_{dk}", clear_on_submit=True):
+                nt = st.text_input("", placeholder="업무 추가", label_visibility="collapsed")
+                if st.form_submit_button("+ 추가", use_container_width=True) and nt.strip():
+                    tasks_add(dk, nt.strip())
+                    st.rerun()
+
+    st.markdown(
+        f'<div class="sum-row">이번 주 진행:'
+        f'<span class="sum-badge">{done_t}/{total_t}</span>업무 완료</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
+
+def page_create():
+    # ═════════════════════════════════════════════════════════════════════════
+    # SECTION A — 💡 아이디어 노트  +  📔 다이어리
+    # ═════════════════════════════════════════════════════════════════════════
+    idea_col, diary_col = st.columns([1, 1], gap="large")
+
+    # ── 아이디어 노트 ──────────────────────────────────────────────────────
+    with idea_col:
+        st.markdown('<div class="sec-lbl">💡 아이디어 노트</div>', unsafe_allow_html=True)
+
+        with st.form("add_idea", clear_on_submit=True):
+            idea_txt = st.text_area(
+                "", placeholder="번뜩이는 아이디어를 바로 적어두세요...",
+                height=95, label_visibility="collapsed", key="idea_inp",
+            )
+            if st.form_submit_button("💾 저장", use_container_width=True) and idea_txt.strip():
+                ideas_add(idea_txt.strip())
+                st.rerun()
+
+        ideas = ideas_load()
+
+        if ideas:
+            rows = [[item.get("created_at","")[:16].replace("T"," "), item["text"]]
+                    for item in ideas]
+            st.download_button(
+                "⬇️ 전체 다운로드 (.csv)", make_csv(["날짜", "아이디어"], rows),
+                f"ideas_{date.today()}.csv", "text/csv;charset=utf-8",
+                use_container_width=True, key="dl_ideas",
+            )
+
+        def _idea_card(item, key_suffix=""):
+            c1, c2 = st.columns([11, 1])
+            with c1:
+                dt = item.get("created_at", "")[:16].replace("T", " ")
+                st.markdown(f"""
+                <div style="padding:5px 10px 6px;background:#f8fafc;border-radius:8px;
+                            margin-bottom:4px;border-left:3px solid #4361ee">
+                  <div style="font-size:10px;color:#b0bbd4;margin-bottom:1px">{dt}</div>
+                  <div style="font-size:13px;line-height:1.45;white-space:pre-wrap">
+                    {html_lib.escape(item['text'])}</div>
+                </div>""", unsafe_allow_html=True)
+            with c2:
+                if st.button("✕", key=f"del_idea{key_suffix}_{item['id']}", help="삭제"):
+                    ideas_delete(item["id"])
+                    st.rerun()
+
+        for item in ideas[:5]:
+            _idea_card(item)
+
+        if len(ideas) > 5:
+            with st.expander(f"더보기 ({len(ideas) - 5}개)"):
+                for item in ideas[5:]:
+                    _idea_card(item, key_suffix="_ex")
+
+    # ── 다이어리 ──────────────────────────────────────────────────────────
+    with diary_col:
+        st.markdown('<div class="sec-lbl">📔 다이어리</div>', unsafe_allow_html=True)
+
+        diary_date = st.date_input(
+            "", value=date.today(),
+            label_visibility="collapsed", key="diary_date_sel",
+        )
+        date_str = diary_date.strftime("%Y-%m-%d")
+        dn = DAYS_KR[diary_date.weekday()]
+        st.caption(f"📅 {diary_date.strftime('%Y년 %m월 %d일')} ({dn})")
+
+        existing = diary_load(date_str)
+        content = st.text_area(
+            "", value=existing, height=200,
+            placeholder="오늘의 생각, 느낌, 배운 것들을 자유롭게 기록해보세요...",
+            label_visibility="collapsed",
+            key=f"diary_{date_str}",
+        )
+
+        sv1, sv2 = st.columns(2)
+        with sv1:
+            if st.button("💾 저장", key="diary_save_btn",
+                         use_container_width=True, type="primary"):
+                diary_save(date_str, content)
+                st.success("저장되었습니다!")
+
+        all_diary = diary_all()
+
+        if all_diary:
+            d_rows = []
+            for entry in all_diary:
+                try:
+                    d = datetime.strptime(entry["date"], "%Y-%m-%d")
+                    label = f"{d.strftime('%Y년 %m월 %d일')} ({DAYS_KR[d.weekday()]})"
+                except Exception:
+                    label = entry["date"]
+                d_rows.append([label, entry.get("content", "")])
+            with sv2:
+                st.download_button(
+                    "⬇️ 전체 다운로드 (.csv)", make_csv(["날짜", "내용"], d_rows),
+                    f"diary_{date.today()}.csv", "text/csv;charset=utf-8",
+                    use_container_width=True, key="dl_diary",
+                )
+
+        prev5 = [e for e in all_diary if e["date"] != date_str][:5]
+        if prev5:
+            st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+            st.markdown('<div style="font-size:11px;font-weight:700;color:#94a3b8;'
+                        'text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">'
+                        '최근 기록</div>', unsafe_allow_html=True)
+            for entry in prev5:
+                try:
+                    d = datetime.strptime(entry["date"], "%Y-%m-%d")
+                    lbl = f"{d.strftime('%Y.%m.%d')} ({DAYS_KR[d.weekday()]})"
+                except Exception:
+                    lbl = entry["date"]
+                preview = (entry.get("content") or "")[:70]
+                if len(entry.get("content", "")) > 70:
+                    preview += "..."
+                st.markdown(f"""
+                <div style="padding:9px 13px;background:#f8fafc;border-radius:9px;
+                            margin-bottom:6px;border-left:3px solid #7c3aed">
+                  <div style="font-size:11px;font-weight:700;color:#4361ee;
+                              margin-bottom:3px">{lbl}</div>
+                  <div style="font-size:12px;color:#475569;white-space:pre-wrap;
+                              line-height:1.5">{html_lib.escape(preview)}</div>
+                </div>""", unsafe_allow_html=True)
+
+    st.divider()
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # SECTION B — 번역 & 영어 학습
+    # ═════════════════════════════════════════════════════════════════════════
+    st.markdown('<div class="sec-lbl">🌐 번역 &amp; 영어 학습</div>', unsafe_allow_html=True)
+
+    if not API_KEY:
+        st.warning("⚠️ ANTHROPIC_API_KEY가 없습니다. Streamlit Cloud Secrets 또는 .env 파일을 확인해주세요.")
+
+    mc1, mc2 = st.columns([3, 2])
+    with mc1:
+        tr_mode = st.radio("모드", ["번역","해석 / 설명","어휘 분석"],
+                            horizontal=True, label_visibility="collapsed", key="tr_mode")
+    with mc2:
+        lang_dir = st.selectbox("언어", ["🇰🇷 한국어 → 🇬🇧 영어","🇬🇧 영어 → 🇰🇷 한국어"],
+                                 label_visibility="collapsed", key="tr_lang")
+
+    ic1, ic2, ic3 = st.columns([8, 1, 8], gap="small")
+
+    with ic1:
+        src_lbl = "🇰🇷 한국어 입력" if "한국어" in lang_dir.split("→")[0] else "🇬🇧 영어 입력"
+        st.caption(src_lbl)
+        src_text = st.text_area("", placeholder="번역할 텍스트를 입력하세요...",
+                                 height=155, label_visibility="collapsed", key="tr_src")
+
+    with ic2:
+        st.markdown("<div style='height:42px'></div>", unsafe_allow_html=True)
+        do_tr = st.button("▶▶", key="do_tr", use_container_width=True)
+        if st.button("✕", key="clear_tr", use_container_width=True):
+            st.session_state.tr_result = ""
+            st.rerun()
+
+    with ic3:
+        tgt_lbl = "🇬🇧 영어 결과" if "한국어" in lang_dir.split("→")[0] else "🇰🇷 한국어 결과"
+        st.caption(tgt_lbl)
+        res = st.session_state.get("tr_result", "")
+        if res:
+            st.markdown(f'<div class="tr-result">{html_lib.escape(res)}</div>', unsafe_allow_html=True)
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                if st.button("💾 저장", key="tr_save"):
+                    tr_add(src_text, res, tr_mode, now.strftime("%Y-%m-%d"))
+                    st.success("저장됨!")
+            with sc2:
+                st.caption("결과를 드래그하여 복사")
+        else:
+            st.markdown('<div class="tr-result tr-empty">번역 결과가 여기에 표시됩니다...</div>',
+                        unsafe_allow_html=True)
+
+    if do_tr:
+        if not src_text.strip():
+            st.warning("텍스트를 입력해주세요.")
+        elif not API_KEY:
+            st.error("API 키가 필요합니다.")
+        else:
+            sl = "한국어" if "한국어" in lang_dir.split("→")[0] else "영어"
+            tl = "영어" if sl == "한국어" else "한국어"
+            prompts = {
+                "번역": f"다음 {sl} 텍스트를 {tl}로 번역해주세요. 번역문만 출력하세요.\n\n{src_text}",
+                "해석 / 설명": f"다음 텍스트를 분석해주세요:\n1. 의미 설명\n2. 뉘앙스/문화적 맥락\n3. {tl} 번역\n\n텍스트: {src_text}",
+                "어휘 분석": f"다음 텍스트의 주요 어휘를 분석해주세요:\n1. 핵심 단어/표현 (원문→번역→예문)\n2. 유용한 관용 표현이나 문법 포인트\n\n텍스트: {src_text}",
+            }
+            with st.spinner("Claude가 번역 중입니다..."):
                 try:
                     client = anthropic.Anthropic(api_key=API_KEY)
-                    api_msgs = [
-                        {"role": m["role"], "content": m["content"]}
-                        for m in st.session_state.chat_messages
-                    ]
-
-                    def _stream():
-                        with client.messages.stream(
-                            model="claude-sonnet-4-6",
-                            max_tokens=4096,
-                            system=system_prompt,
-                            messages=api_msgs,
-                        ) as s:
-                            yield from s.text_stream
-
-                    response = st.write_stream(_stream())
-                    st.session_state.chat_messages.append(
-                        {"role": "assistant", "content": response}
+                    msg = client.messages.create(
+                        model="claude-haiku-4-5-20251001", max_tokens=1500,
+                        messages=[{"role": "user", "content": prompts[tr_mode]}],
                     )
+                    st.session_state.tr_result = msg.content[0].text
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"오류가 발생했습니다: {e}")
+                    st.error(f"번역 오류: {e}")
+
+    saved_tr = tr_load()
+    if saved_tr:
+        with st.expander(f"📚 저장된 번역 / 학습 기록  ({len(saved_tr)}건)"):
+            for i, item in enumerate(saved_tr[:10]):
+                sa, sb = st.columns([7, 1])
+                with sa:
+                    prev = item["src"][:80] + ("..." if len(item["src"]) > 80 else "")
+                    st.markdown(
+                        f'<div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px">'
+                        f'<span style="font-size:11px;color:#94a3b8">{item["date"]} · {item["mode"]}</span><br>'
+                        f'<span style="font-size:13px">{html_lib.escape(prev)}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                with sb:
+                    if st.button("불러오기", key=f"load_tr_{i}"):
+                        st.session_state.tr_result = item["result"]
+                        st.rerun()
+
+    st.divider()
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # SECTION C — 🤖 AI 채팅
+    # ═════════════════════════════════════════════════════════════════════════
+    st.markdown('<div class="sec-lbl">🤖 AI 채팅</div>', unsafe_allow_html=True)
+
+    if not API_KEY:
+        st.warning("⚠️ ANTHROPIC_API_KEY가 없습니다. Streamlit Cloud Secrets를 확인해주세요.")
+    else:
+        if "chat_messages" not in st.session_state:
+            st.session_state.chat_messages = []
+
+        ROLES = {
+            "🤝 일반 어시스턴트":  "당신은 친절하고 유능한 AI 어시스턴트입니다. 한국어로 대화하세요.",
+            "💼 비즈니스 코치":    "당신은 경험 많은 비즈니스 코치입니다. 실용적이고 구체적인 조언을 한국어로 제공하세요.",
+            "📚 학습 도우미":      "당신은 친절한 학습 도우미입니다. 개념을 쉽고 명확하게 설명하며 한국어로 대화하세요.",
+            "✍️ 글쓰기 도우미":   "당신은 전문 작가이자 편집자입니다. 글쓰기와 표현에 대해 구체적으로 도움을 주세요. 한국어로 대화하세요.",
+            "💡 아이디어 파트너":  "당신은 창의적인 브레인스토밍 파트너입니다. 다양한 관점에서 아이디어를 발전시켜 주세요. 한국어로 대화하세요.",
+        }
+
+        ctrl1, ctrl2, ctrl3 = st.columns([4, 1, 1])
+        with ctrl1:
+            role_key = st.selectbox(
+                "AI 역할", list(ROLES.keys()),
+                label_visibility="collapsed", key="chat_role",
+            )
+            system_prompt = ROLES[role_key]
+        with ctrl2:
+            if st.session_state.chat_messages:
+                chat_rows = [
+                    ["나" if m["role"] == "user" else "AI", m["content"]]
+                    for m in st.session_state.chat_messages
+                ]
+                st.download_button(
+                    "⬇️ 저장 (.csv)", make_csv(["역할", "내용"], chat_rows),
+                    f"chat_{date.today()}.csv", "text/csv;charset=utf-8",
+                    use_container_width=True, key="dl_chat",
+                )
+        with ctrl3:
+            if st.button("🗑️ 초기화", use_container_width=True, key="chat_clear"):
+                st.session_state.chat_messages = []
+                st.rerun()
+
+        chat_box = st.container()
+        with chat_box:
+            for msg in st.session_state.chat_messages:
+                with st.chat_message(msg["role"],
+                                     avatar="🧑" if msg["role"] == "user" else "🤖"):
+                    st.markdown(msg["content"])
+
+        if prompt := st.chat_input("무엇이든 물어보세요..."):
+            st.session_state.chat_messages.append({"role": "user", "content": prompt})
+
+            with chat_box:
+                with st.chat_message("user", avatar="🧑"):
+                    st.markdown(prompt)
+
+                with st.chat_message("assistant", avatar="🤖"):
+                    try:
+                        client = anthropic.Anthropic(api_key=API_KEY)
+                        api_msgs = [
+                            {"role": m["role"], "content": m["content"]}
+                            for m in st.session_state.chat_messages
+                        ]
+
+                        def _stream():
+                            with client.messages.stream(
+                                model="claude-sonnet-4-6",
+                                max_tokens=4096,
+                                system=system_prompt,
+                                messages=api_msgs,
+                            ) as s:
+                                yield from s.text_stream
+
+                        response = st.write_stream(_stream())
+                        st.session_state.chat_messages.append(
+                            {"role": "assistant", "content": response}
+                        )
+                    except Exception as e:
+                        st.error(f"오류가 발생했습니다: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB NAVIGATION
+# ─────────────────────────────────────────────────────────────────────────────
+tab1, tab2 = st.tabs(["🏠 대시보드", "✏️ 창작 & 학습"])
+
+with tab1:
+    page_dashboard()
+
+with tab2:
+    page_create()
